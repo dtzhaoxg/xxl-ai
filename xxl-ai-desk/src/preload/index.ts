@@ -4,12 +4,17 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '../shared/ipc'
 import type {
   AppSettings,
+  BrowserActionRequest,
+  BrowserActionResult,
+  BrowserOpenTabRequest,
   ChatApprovalChoice,
   ChatApprovalPrompt,
   ChatEvent,
   DeskApi,
   FileContent,
   FsEntry,
+  McpDTO,
+  McpDiscoverQuery,
   OpenWithApp,
   ProviderDTO,
   ProviderModelQuery,
@@ -17,6 +22,12 @@ import type {
   RuntimeDetectResult,
   RuntimeExecInput,
   SessionDTO,
+  SkillDiscoverDetail,
+  SkillDiscoverQuery,
+  SkillContentChunk,
+  SkillDTO,
+  SkillDetail,
+  SkillImportResult,
   StoredMessage,
   TerminalCreateInput,
   TerminalEvent,
@@ -37,8 +48,7 @@ const api: DeskApi = {
     /* 重启应用使变更生效 */
     relaunch: () => ipcRenderer.invoke(IPC.appRelaunch),
     /* 弹出可执行文件选择框 */
-    selectExecutable: (title?: string) =>
-      ipcRenderer.invoke(IPC.appSelectExecutable, title),
+    selectExecutable: (title?: string) => ipcRenderer.invoke(IPC.appSelectExecutable, title),
     /* 检测运行时可执行文件版本 */
     detectExecutable: (input: RuntimeExecInput): Promise<RuntimeDetectResult> =>
       ipcRenderer.invoke(IPC.appDetectExecutable, input)
@@ -66,8 +76,7 @@ const api: DeskApi = {
     /* 删除供应商 */
     remove: (id: string) => ipcRenderer.invoke(IPC.providerRemove, id),
     /* 查询远端可用模型 */
-    remoteModels: (input: ProviderModelQuery) =>
-      ipcRenderer.invoke(IPC.providerRemoteModels, input)
+    remoteModels: (input: ProviderModelQuery) => ipcRenderer.invoke(IPC.providerRemoteModels, input)
   },
   /* 项目管理 */
   project: {
@@ -98,8 +107,6 @@ const api: DeskApi = {
     /* 读取会话历史消息 */
     messages: (sessionId: string): Promise<StoredMessage[]> =>
       ipcRenderer.invoke(IPC.sessionMessages, sessionId),
-    /* 清空会话消息 */
-    clear: (sessionId: string) => ipcRenderer.invoke(IPC.sessionClear, sessionId),
     /* 按 ID 删除指定消息 */
     removeMessages: (sessionId: string, ids: string[]) =>
       ipcRenderer.invoke(IPC.sessionDeleteMessages, sessionId, ids)
@@ -128,8 +135,12 @@ const api: DeskApi = {
   },
   /* 终端管理 */
   terminal: {
-    /* 创建终端实例 */
-    create: (input?: TerminalCreateInput) => ipcRenderer.invoke(IPC.terminalCreate, input),
+    /* 创建终端实例（必须归属会话） */
+    create: (input: TerminalCreateInput) => ipcRenderer.invoke(IPC.terminalCreate, input),
+    /* 列举某会话存活的终端实例 */
+    list: (sessionId: string) => ipcRenderer.invoke(IPC.terminalList, sessionId),
+    /* 重连终端：返回实例信息与历史输出片段 */
+    attach: (id: string) => ipcRenderer.invoke(IPC.terminalAttach, id),
     /* 写入终端输入 */
     write: (id: string, data: string) => ipcRenderer.invoke(IPC.terminalWrite, id, data),
     /* 调整终端尺寸 */
@@ -137,6 +148,9 @@ const api: DeskApi = {
       ipcRenderer.invoke(IPC.terminalResize, id, cols, rows),
     /* 销毁终端实例 */
     dispose: (id: string) => ipcRenderer.invoke(IPC.terminalDispose, id),
+    /* 终端归属会话迁移（新建对话草稿 → 真实会话） */
+    reassign: (fromSessionId: string, toSessionId: string) =>
+      ipcRenderer.invoke(IPC.terminalReassign, fromSessionId, toSessionId),
     /* 订阅终端输出 / 退出事件（返回取消订阅函数） */
     onEvent: (callback: (event: TerminalEvent) => void) => {
       const listener = (_event: unknown, payload: TerminalEvent): void => callback(payload)
@@ -182,12 +196,71 @@ const api: DeskApi = {
   },
   /* 内嵌浏览器 */
   browser: {
-    /* 内嵌浏览器：guest 新窗口请求 → 渲染层新标签页（返回取消订阅函数） */
-    onOpenTab: (callback: (url: string) => void) => {
-      const listener = (_event: unknown, url: string): void => callback(url)
+    /* 内嵌浏览器：新窗口 / Agent 打开请求 → 渲染层标签页（返回取消订阅函数） */
+    onOpenTab: (callback: (request: BrowserOpenTabRequest) => void) => {
+      const listener = (_event: unknown, request: BrowserOpenTabRequest): void => callback(request)
       ipcRenderer.on(IPC.browserOpenTab, listener)
       return () => ipcRenderer.removeListener(IPC.browserOpenTab, listener)
-    }
+    },
+    /* Agent 页面动作请求：渲染层执行脚本并回传结果（返回取消订阅函数） */
+    onActionRequest: (callback: (request: BrowserActionRequest) => void) => {
+      const listener = (_event: unknown, request: BrowserActionRequest): void => callback(request)
+      ipcRenderer.on(IPC.browserActionRequest, listener)
+      return () => ipcRenderer.removeListener(IPC.browserActionRequest, listener)
+    },
+    /* 回传页面动作结果 */
+    respondAction: (requestId: string, result: BrowserActionResult) =>
+      ipcRenderer.invoke(IPC.browserActionResult, requestId, result)
+  },
+  /* MCP 插件中心 */
+  mcp: {
+    /* MCP 服务列表 */
+    list: () => ipcRenderer.invoke(IPC.mcpList),
+    /* 新增或更新 MCP 服务 */
+    save: (dto: Partial<McpDTO>) => ipcRenderer.invoke(IPC.mcpSave, dto),
+    /* 删除 MCP 服务 */
+    remove: (id: string) => ipcRenderer.invoke(IPC.mcpRemove, id),
+    /* 连通测试 */
+    test: (dto: Partial<McpDTO>) => ipcRenderer.invoke(IPC.mcpTest, dto),
+    /* 已保存服务的工具列表 */
+    tools: (id: string) => ipcRenderer.invoke(IPC.mcpTools, id),
+    /* 发现 MCP：在线检索 */
+    discover: (query: McpDiscoverQuery) => ipcRenderer.invoke(IPC.mcpDiscover, query),
+    /* 发现 MCP：社区分类列表 */
+    categories: () => ipcRenderer.invoke(IPC.mcpCategories),
+    /* 发现 MCP：详情 */
+    detail: (slug: string) => ipcRenderer.invoke(IPC.mcpDetail, slug)
+  },
+  /* SKILL 技能中心 */
+  skill: {
+    /* 技能列表 */
+    list: (): Promise<SkillDTO[]> => ipcRenderer.invoke(IPC.skillList),
+    /* 技能详情 */
+    detail: (id: string): Promise<SkillDetail> => ipcRenderer.invoke(IPC.skillDetail, id),
+    /* 技能正文续读 */
+    content: (id: string, offset: number): Promise<SkillContentChunk> =>
+      ipcRenderer.invoke(IPC.skillContent, id, offset),
+    /* 从本地目录导入 */
+    importDirectory: (): Promise<SkillImportResult | null> =>
+      ipcRenderer.invoke(IPC.skillImportDir),
+    /* 从 Zip 导入 */
+    importZip: (): Promise<SkillImportResult | null> => ipcRenderer.invoke(IPC.skillImportZip),
+    /* 启用 / 停用 */
+    setEnabled: (id: string, enabled: boolean): Promise<SkillDTO> =>
+      ipcRenderer.invoke(IPC.skillSetEnabled, id, enabled),
+    /* 删除技能 */
+    remove: (id: string) => ipcRenderer.invoke(IPC.skillRemove, id),
+    /* 在文件管理器中显示技能目录 */
+    reveal: (id: string) => ipcRenderer.invoke(IPC.skillReveal, id),
+    /* 重新扫描 */
+    refresh: (): Promise<SkillDTO[]> => ipcRenderer.invoke(IPC.skillRefresh),
+    /* 发现 SKILL：检索 / 榜单 */
+    discover: (query: SkillDiscoverQuery) => ipcRenderer.invoke(IPC.skillDiscover, query),
+    /* 发现 SKILL：详情描述 */
+    discoverDetail: (id: string): Promise<SkillDiscoverDetail> =>
+      ipcRenderer.invoke(IPC.skillDiscoverDetail, id),
+    /* 发现 SKILL：安装 */
+    install: (id: string): Promise<SkillDTO> => ipcRenderer.invoke(IPC.skillInstall, id)
   }
 }
 

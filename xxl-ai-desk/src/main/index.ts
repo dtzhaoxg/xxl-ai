@@ -1,16 +1,19 @@
-/* XXL-AI Desk 主进程入口：窗口、生命周期、IPC 装配 */
+/* XXL-AI-Desk 主进程入口：窗口、生命周期、IPC 装配 */
 
 import { app, BrowserWindow, nativeImage, shell } from 'electron'
 import { existsSync } from 'fs'
 import { join } from 'path'
 import log from 'electron-log/main'
 import { IPC } from '@shared/ipc'
+import { APP_NAME } from '@shared/appInfo'
 import { initDatabase } from './db'
 import { registerIpc } from './ipc'
 import { ensureSeedProviders } from './services/providerService'
+import { registerLocalFileProtocol } from './services/localFileProtocolService'
 import { disposeAllTerminals } from './services/terminalService'
 import { disposeAllFsWatch } from './services/fsWatchService'
 import { disposeAgentRuntime } from './agent/host/runtimeHost'
+import { disposeBrowserActions } from './agent/host/browserBridge'
 
 /* 主窗口引用（未创建或已关闭时为 null） */
 let mainWindow: BrowserWindow | null = null
@@ -35,7 +38,7 @@ function createWindow(): void {
     minHeight: 720,
     show: false,
     autoHideMenuBar: true,
-    title: 'XXL-AI Desk',
+    title: APP_NAME,
     backgroundColor: '#ffffff',
     ...(isMac
       ? {
@@ -65,9 +68,15 @@ function createWindow(): void {
     app.dock?.setIcon(nativeImage.createFromPath(appIconPath))
   }
 
-  /* 窗口关闭：解除引用，避免后续误用已销毁窗口 */
+  /* 窗口关闭：解除引用并结算未完成的浏览器读取，避免等待超时 */
   mainWindow.on('closed', () => {
+    disposeBrowserActions()
     mainWindow = null
+  })
+
+  /* 渲染进程崩溃/重载：回收残留 PTY，避免进程泄漏 */
+  mainWindow.webContents.on('render-process-gone', () => {
+    disposeAllTerminals()
   })
 
   /* 外链使用系统浏览器打开 */
@@ -75,6 +84,23 @@ function createWindow(): void {
     shell.openExternal(url)
     return { action: 'deny' }
   })
+
+  /*
+   * 拦截主窗口内导航：Markdown / 页面内的普通链接不得替换应用界面。
+   * 同文档（仅 hash 变化）放行；其余 http(s) 交给系统浏览器。
+   */
+  const guardNavigation = (event: Electron.Event, url: string): void => {
+    const current = mainWindow?.webContents.getURL() ?? ''
+    if (url.split('#')[0] === current.split('#')[0]) {
+      return
+    }
+    event.preventDefault()
+    if (/^https?:/i.test(url)) {
+      void shell.openExternal(url)
+    }
+  }
+  mainWindow.webContents.on('will-navigate', guardNavigation)
+  mainWindow.webContents.on('will-redirect', guardNavigation)
 
   if (process.env.ELECTRON_RENDERER_URL) {
     mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
@@ -102,6 +128,7 @@ if (!gotLock) {
     log.initialize()
     initDatabase()
     ensureSeedProviders()
+    registerLocalFileProtocol()
     registerIpc(() => mainWindow)
 
     /*
@@ -111,7 +138,12 @@ if (!gotLock) {
     app.on('web-contents-created', (_event, contents) => {
       if (contents.getType() === 'webview') {
         contents.setWindowOpenHandler(({ url }) => {
-          mainWindow?.webContents.send(IPC.browserOpenTab, url)
+          /* 页面内新窗口请求：始终新建标签页；sessionId 留空由渲染层按当前会话兜底 */
+          mainWindow?.webContents.send(IPC.browserOpenTab, {
+            sessionId: '',
+            url,
+            newTab: true
+          })
           return { action: 'deny' }
         })
       }
@@ -136,10 +168,19 @@ if (!gotLock) {
     app.quit()
   })
 
-  /* 退出前回收托管运行时进程、全部终端与目录监听，避免残留 */
-  app.on('before-quit', () => {
-    disposeAgentRuntime()
-    disposeAllTerminals()
-    disposeAllFsWatch()
+  /* 退出前回收托管运行时进程、全部终端与目录监听，避免残留（含 MCP 的 npx/node 子进程） */
+  let quitting = false
+  app.on('before-quit', (event) => {
+    if (quitting) {
+      return
+    }
+    /* 先阻塞退出，等待运行时进程优雅关闭后再统一清理并真正退出 */
+    event.preventDefault()
+    quitting = true
+    void disposeAgentRuntime().finally(() => {
+      disposeAllTerminals()
+      disposeAllFsWatch()
+      app.quit()
+    })
   })
 }

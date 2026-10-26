@@ -5,6 +5,7 @@ import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from '@renderer/api'
 import { setLanguage, t } from '@renderer/i18n'
+import { createDefaultSettings } from '@shared/ipc'
 import type {
   AppSettings,
   ProviderDTO,
@@ -15,21 +16,8 @@ import type {
 } from '@shared/ipc'
 
 export const useSettingsStore = defineStore('settings', () => {
-  /* 应用设置（主题/语言/默认供应商与模型/系统提示词/快捷操作等） */
-  const settings = ref<AppSettings>({
-    theme: 'dark',
-    language: 'zh',
-    providerId: '',
-    modelId: '',
-    systemPrompt: '',
-    appName: '',
-    slogan: '',
-    shortcuts: {},
-    runtimeNodeMode: 'builtin',
-    runtimeNodePath: '',
-    runtimePythonPath: '',
-    updateAutoCheck: true
-  })
+  /* 应用设置（默认值与主进程共用 shared/defaults） */
+  const settings = ref<AppSettings>(createDefaultSettings())
   /* 供应商列表 */
   const providers = ref<ProviderDTO[]>([])
   /* 设置是否已首次加载 */
@@ -53,17 +41,6 @@ export const useSettingsStore = defineStore('settings', () => {
 
   /* 已启用的供应商 */
   const enabledProviders = computed(() => providers.value.filter((item) => item.enabled))
-  /* 当前选中供应商（未选中为 null） */
-  const currentProvider = computed(
-    () => providers.value.find((item) => item.id === settings.value.providerId) ?? null
-  )
-  /* 当前供应商可用模型列表 */
-  const currentModels = computed(() => currentProvider.value?.models ?? [])
-  /* 是否具备可对话条件（已选模型或存在可用供应商） */
-  const ready = computed(
-    () => Boolean(currentProvider.value && settings.value.modelId) || providers.value.length > 0
-  )
-
   /* 应用主题到 DOM（Element Plus 深色模式依赖 html.dark） */
   function applyTheme(): void {
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -104,7 +81,10 @@ export const useSettingsStore = defineStore('settings', () => {
     const saved = await api.provider.save(dto)
     providers.value = await api.provider.list()
     if (!settings.value.providerId) {
-      await saveSettings({ providerId: saved.id, modelId: saved.models[0] ?? '' })
+      await saveSettings({
+        providerId: saved.id,
+        modelId: saved.models[0] ?? ''
+      })
     }
     return saved
   }
@@ -115,7 +95,10 @@ export const useSettingsStore = defineStore('settings', () => {
     providers.value = await api.provider.list()
     if (settings.value.providerId === id) {
       const next = providers.value[0]
-      await saveSettings({ providerId: next?.id ?? '', modelId: next?.models[0] ?? '' })
+      await saveSettings({
+        providerId: next?.id ?? '',
+        modelId: next?.models[0] ?? ''
+      })
     }
   }
 
@@ -204,9 +187,6 @@ export const useSettingsStore = defineStore('settings', () => {
     version,
     platform,
     enabledProviders,
-    currentProvider,
-    currentModels,
-    ready,
     load,
     saveSettings,
     saveProvider,

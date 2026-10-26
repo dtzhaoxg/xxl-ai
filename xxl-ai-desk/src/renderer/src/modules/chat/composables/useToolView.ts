@@ -1,0 +1,151 @@
+/*
+ * 工具调用的展示视图：把底层工具名与原始参数翻译成人话，
+ * 让每一步执行都能在时间线上被看懂（做了什么、对谁做）。
+ */
+
+import { t } from '@renderer/i18n'
+import type { ToolCallState } from '@renderer/types'
+
+/* 工具展示视图 */
+export interface ToolView {
+  /* 图标组件名（已全局注册） */
+  icon: string
+  /* 本地化动作标题，如「读取文件」 */
+  title: string
+  /* 关键参数摘要，如文件路径 / 命令 / 正则 */
+  detail: string
+}
+
+/* 工具名 → 标题文案 key */
+const TOOL_TITLE_KEYS: Record<string, string> = {
+  read_file: 'readFile',
+  write_file: 'writeFile',
+  edit_file: 'editFile',
+  list_directory: 'listDir',
+  glob_files: 'glob',
+  search_files: 'search',
+  run_command: 'command',
+  get_current_time: 'time',
+  open_browser: 'openBrowser',
+  read_browser: 'readBrowser',
+  read_skill: 'readSkill',
+  snapshot_browser: 'snapshotBrowser',
+  click_browser: 'clickBrowser',
+  fill_browser: 'fillBrowser',
+  wait_browser: 'waitBrowser',
+  screenshot_browser: 'screenshotBrowser',
+  inspect_browser: 'inspectBrowser',
+  browser_tabs: 'browserTabs'
+}
+
+/* 工具名 → 图标组件名 */
+const TOOL_ICONS: Record<string, string> = {
+  read_file: 'Document',
+  write_file: 'DocumentAdd',
+  edit_file: 'EditPen',
+  list_directory: 'Folder',
+  glob_files: 'Search',
+  search_files: 'Search',
+  run_command: 'Monitor',
+  get_current_time: 'Clock',
+  read_skill: 'Reading',
+  open_browser: 'Link',
+  read_browser: 'View',
+  snapshot_browser: 'Document',
+  click_browser: 'SetUp',
+  fill_browser: 'EditPen',
+  wait_browser: 'Clock',
+  screenshot_browser: 'Monitor',
+  inspect_browser: 'WarningFilled',
+  browser_tabs: 'FolderOpened'
+}
+
+/* 参数摘要过长时截断，避免撑破单行 */
+function clip(value: string, max = 72): string {
+  return value.length > max ? `${value.slice(0, max)}…` : value
+}
+
+/* 从工具参数中提取最能说明意图的关键字段 */
+function detailOf(name: string, args: unknown): string {
+  if (!args || typeof args !== 'object') {
+    return ''
+  }
+  const record = args as Record<string, unknown>
+  /* 读取字符串格式的参数值，非字符串返回空串 */
+  const pick = (key: string): string => (typeof record[key] === 'string' ? (record[key] as string) : '')
+  switch (name) {
+    case 'read_file':
+    case 'write_file':
+    case 'edit_file':
+    case 'list_directory':
+      return clip(pick('path'))
+    case 'glob_files':
+      return clip(pick('pattern'))
+    case 'search_files': {
+      const pattern = pick('pattern')
+      const include = pick('include')
+      return clip(include ? `${pattern}  (${include})` : pattern)
+    }
+    case 'get_current_time':
+      return clip(pick('timezone'))
+    case 'read_skill':
+      return clip(pick('name') + (pick('path') ? ` / ${pick('path')}` : ''))
+    case 'run_command':
+      return clip(pick('command'))
+    case 'open_browser':
+      return clip(pick('url') || pick('action'))
+    case 'read_browser':
+      return clip(pick('selector'))
+    case 'snapshot_browser':
+      return ''
+    case 'click_browser':
+      return clip(pick('ref') || pick('selector'))
+    case 'fill_browser': {
+      const fields = Array.isArray(record.fields) ? record.fields.length : 0
+      return fields > 0 ? t('chat.toolFields', [fields]) : ''
+    }
+    case 'wait_browser':
+      return clip(pick('selector') || pick('text') || pick('url'))
+    case 'screenshot_browser':
+      return ''
+    case 'inspect_browser':
+      return ''
+    case 'browser_tabs':
+      return clip(pick('operation') === 'list' ? 'list' : `${pick('operation')} ${pick('tab_id')}`)
+    default:
+      return ''
+  }
+}
+
+/* 生成工具调用的展示视图 */
+export function toolView(tool: ToolCallState): ToolView {
+  const key = TOOL_TITLE_KEYS[tool.name]
+  /* MCP 工具：展示「MCP 工具」标题，详情给出原始工具标识 */
+  if (!key && tool.name.startsWith('mcp_')) {
+    return {
+      icon: TOOL_ICONS[tool.name] ?? 'Connection',
+      title: t('chat.tool.mcp'),
+      detail: clip(tool.name.slice(4).replace(/_/g, ' / '))
+    }
+  }
+  /* 未知工具回退为原始工具名，再回退通用标题 */
+  const title = key ? t(`chat.tool.${key}`) : tool.name || t('chat.tool.generic')
+  return {
+    /* 未知工具使用通用图标 */
+    icon: TOOL_ICONS[tool.name] ?? 'Tools',
+    title,
+    detail: detailOf(tool.name, tool.args)
+  }
+}
+
+/* 工具参数 → 格式化的 JSON 文本（展开查看用） */
+export function toolArgsText(args: unknown): string {
+  if (args === undefined || args === null) {
+    return ''
+  }
+  try {
+    return JSON.stringify(args, null, 2)
+  } catch {
+    return String(args)
+  }
+}

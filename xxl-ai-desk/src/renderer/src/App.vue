@@ -1,21 +1,24 @@
 <script setup lang="ts">
-/* 应用外壳：左侧会话栏（可折叠）+ 右侧内容区 + 全局快捷键 */
+/* 应用外壳：三段式布局 + 全局快捷键 + 壳级宿主（终端/浏览器/审批/更新提示） */
 import { onBeforeUnmount, onMounted } from 'vue'
-import Sidebar from '@renderer/modules/chat/components/Sidebar.vue'
+import { BrowserHost, ShellTerminalHost } from '@renderer/modules/workspace'
+import { UpdateDialog } from '@renderer/modules/settings'
 import ApprovalDialog from '@renderer/components/ApprovalDialog.vue'
-import AppTopbar from '@renderer/components/AppTopbar.vue'
+import AppSidebar from '@renderer/components/shell/AppSidebar.vue'
+import AppTopbar from '@renderer/components/shell/AppTopbar.vue'
 import { useSettingsStore } from '@renderer/stores/settings'
 import { useChatStore } from '@renderer/stores/chat'
 import { useProjectStore } from '@renderer/stores/project'
 import { useQuickAction } from '@renderer/composables/useQuickAction'
+import { useSessionLifecycle } from '@renderer/composables/useSessionLifecycle'
 import { matchShortcut } from '@renderer/utils/shortcut'
-import { t } from './i18n'
 import type { QuickAction } from '@shared/ipc'
 
 const settings = useSettingsStore()
 const chat = useChatStore()
 const project = useProjectStore()
 const runQuickAction = useQuickAction()
+const sessionLifecycle = useSessionLifecycle()
 
 /* 启动后延迟检查更新的定时器（卸载时清理） */
 let updateTimer: ReturnType<typeof setTimeout> | null = null
@@ -45,13 +48,10 @@ onMounted(async () => {
   await settings.load()
   await project.loadProjects()
   await chat.loadSessions()
-  /* 默认进入最后一条对话（最近更新优先）；无对话则进入新建对话 */
-  const last = chat.sessions[0]
-  if (last) {
-    await chat.selectSession(last.id)
-  } else {
-    chat.startNewChat()
-  }
+  /* 校准并开始监听会话生命周期：清理已删除会话遗留的工作区/浏览器/对话 UI 持久化 */
+  sessionLifecycle.start(chat.sessions.map((session) => session.id))
+  /* 默认定位会话：有历史会话则打开最后打开的会话，否则进入新建对话页面 */
+  await chat.restoreLastSession()
   /* 启动后延迟静默检查更新（仅发现新版本时弹提示，失败静默） */
   if (settings.settings.updateAutoCheck) {
     updateTimer = setTimeout(() => {
@@ -72,69 +72,63 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="desk-shell">
-    <!-- 全局顶栏：红黄绿（系统）+ 后退/前进 + 折叠按钮；页面标题/操作随路由展示 -->
+    <!-- 全局顶栏：软件名称 + 页面标题/操作随路由展示 -->
     <AppTopbar />
 
     <div class="desk-body">
-      <Sidebar />
+      <AppSidebar />
       <div class="desk-main">
-        <RouterView />
+        <div class="desk-view">
+          <RouterView />
+        </div>
+
+        <!-- 底部终端：首次打开后常驻挂载（域逻辑在 workspace 内） -->
+        <ShellTerminalHost />
       </div>
     </div>
+
+    <!-- 浏览器宿主层：跨会话保活 webview，按工具面板锚点定位 -->
+    <BrowserHost />
 
     <!-- 越界访问审批：全局应用内对话框 -->
     <ApprovalDialog />
 
     <!-- 客户端更新提示：发现新版本时引导前往下载 -->
-    <el-dialog
-      :model-value="!!settings.updateInfo?.hasUpdate"
-      class="update-dialog"
-      :title="t('update.title')"
-      width="520px"
-      align-center
-      @close="settings.dismissUpdate()"
-    >
-      <div class="update-body">
-        <div class="update-version">
-          {{ t('update.version', [settings.updateInfo?.latestVersion ?? '']) }}
-        </div>
-        <div class="update-current">
-          {{ t('update.current', [settings.updateInfo?.currentVersion ?? '']) }}
-        </div>
-        <pre v-if="settings.updateInfo?.notes" class="update-notes">{{ settings.updateInfo.notes }}</pre>
-      </div>
-      <template #footer>
-        <el-button @click="settings.dismissUpdate()">{{ t('update.later') }}</el-button>
-        <el-button type="primary" @click="settings.openUpdate()">{{ t('update.download') }}</el-button>
-      </template>
-    </el-dialog>
+    <UpdateDialog />
   </div>
 </template>
 
-<style scoped>
-.update-version {
-  font-size: 15px;
-  font-weight: 600;
+<style scoped lang="scss">
+/* 外壳纵向布局：顶栏 + 正文 */
+.desk-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--desk-bg);
 }
 
-.update-current {
-  margin-top: 4px;
-  font-size: 13px;
-  color: var(--desk-text-tertiary);
+/* 顶栏之下：左侧栏（图标栏 + 列表面板） + 内容区 */
+.desk-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
 }
 
-.update-notes {
-  margin: 12px 0 0;
-  padding: 10px 12px;
-  max-height: 260px;
-  overflow-y: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-family: inherit;
-  font-size: 13px;
-  color: var(--desk-text-secondary);
-  background: var(--desk-bg-elevated);
-  border: 1px solid var(--desk-border);
-  border-radius: var(--desk-radius-sm);
+.desk-main {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--desk-bg);
+}
+
+/* 页面容器：占满终端以外的剩余高度，供各页面 height:100% 使用 */
+.desk-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 </style>

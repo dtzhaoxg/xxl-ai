@@ -1,6 +1,7 @@
 /*
  * 文件沙箱：把 Agent 的本地文件读写限制在当前项目目录内。
  *   - 目录内：直接放行；
+ *   - 软件数据目录下的 SKILL 内容：只读放行（技能是用户主动安装的可信资料，不打断会话）；
  *   - 目录外：拦截并转交主进程弹应用内对话框人工确认（允许本次 / 本会话允许 / 拒绝），
  *     「本会话允许」记入会话级白名单，后续同路径不再重复询问。
  * 路径解析对符号链接做归一化，避免用软链接绕过目录限制。
@@ -9,8 +10,7 @@
  * 越界审批通过注入的 approvalRequester 回调（跨进程请求主进程对话框）完成。
  */
 
-import { existsSync, realpathSync } from 'fs'
-import { basename, dirname, isAbsolute, join, normalize, resolve, sep } from 'path'
+import { canonicalize, isWithinRoot, resolveTarget } from '../../utils/pathGuard'
 import type { ApprovalChoice, ApprovalRequest, PathAction } from '@shared/agentProtocol'
 
 /* 越界访问的动作类型（文案区分用） */
@@ -31,44 +31,6 @@ const sessionAllowed = new Map<string, Set<string>>()
 /* 清理会话的越界白名单（删除/清空会话时调用） */
 export function clearSessionPermissions(sessionId: string): void {
   sessionAllowed.delete(sessionId)
-}
-
-/*
- * 规范化路径：解析符号链接（对不存在的尾部逐级回退到最近的已存在祖先，再拼回剩余片段），
- * 保证软链接与 .. 都无法绕过根目录判断。
- */
-function canonicalize(target: string): string {
-  let current = resolve(target)
-  const suffix: string[] = []
-  while (!existsSync(current)) {
-    const parent = dirname(current)
-    if (parent === current) {
-      break
-    }
-    suffix.unshift(basename(current))
-    current = parent
-  }
-  let real = current
-  try {
-    real = realpathSync.native(current)
-  } catch {
-    /* 无法解析（如权限不足）时按原路径使用 */
-  }
-  return suffix.length > 0 ? join(real, ...suffix) : real
-}
-
-/* 将用户给定路径解析为绝对路径：空值取根目录，相对路径基于根目录 */
-export function resolveTarget(rootDir: string, target?: string): string {
-  const raw = (target ?? '').trim()
-  if (!raw) {
-    return resolve(rootDir)
-  }
-  return normalize(isAbsolute(raw) ? raw : resolve(rootDir, raw))
-}
-
-/* 判断绝对路径是否位于根目录内（含根目录本身） */
-function isWithinRoot(root: string, abs: string): boolean {
-  return abs === root || abs.startsWith(root + sep)
 }
 
 /* 请求越界审批：转交主进程弹原生对话框；未注册或异常时按拒绝处理 */
@@ -93,10 +55,19 @@ export async function guardPath(options: {
   target?: string
   action: PathAction
   tool: string
+  /* 只读放行目录（如已启用技能目录）：读取越界到这些目录时直接放行 */
+  readRoots?: string[]
 }): Promise<{ allowed: boolean; abs: string; reason?: string }> {
   const root = canonicalize(options.rootDir)
   const abs = canonicalize(resolveTarget(options.rootDir, options.target))
   if (isWithinRoot(root, abs)) {
+    return { allowed: true, abs }
+  }
+  /* SKILL 内容（数据目录下已启用技能目录）：读取直接放行，不弹审批；写入仍按越界流程 */
+  if (
+    options.action === 'read' &&
+    (options.readRoots ?? []).some((item) => isWithinRoot(canonicalize(item), abs))
+  ) {
     return { allowed: true, abs }
   }
   /* 会话级白名单命中：不再重复询问 */

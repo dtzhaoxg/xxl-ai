@@ -1,6 +1,6 @@
 /* 设计令牌：默认浅色（参考 ChatGPT 黑白灰配色），并保留深色主题 */
 :root {
-  /* XXL-AI Desk 自绘组件变量 */
+  /* XXL-AI-Desk 自绘组件变量 */
   --desk-bg: #ffffff;
   --desk-bg-elevated: #f7f7f8;
   --desk-sidebar: #f9f9f9;
@@ -8,9 +8,12 @@
   --desk-chrome-bg: #ececec;
   --desk-panel-bg: #f6f6f6;
   --desk-border: #ececec;
+  /* 选中/悬浮边框：比常规边框稍强，但避免纯黑 */
+  --desk-border-strong: #d4d4d4;
   --desk-border-soft: rgba(0, 0, 0, 0.06);
   --desk-text: #0d0d0d;
   --desk-text-secondary: #5d5d5d;
+  --desk-text-submenu: #3f3f3f;
   --desk-text-tertiary: #8e8e8e;
   --desk-primary: #0d0d0d;
   --desk-primary-hover: #2f2f2f;
@@ -40,8 +43,8 @@
   --code-subst: #1f2328;
   /* 顶部栏高度（左侧 Logo 顶部与之下的正文区顶部对齐） */
   --desk-header-height: 38px;
-  /* 左侧常驻图标栏（活动栏）宽度 */
-  --desk-rail-width: 44px;
+  /* 左侧常驻图标栏（活动栏）宽度：与顶栏高度保持一致 */
+  --desk-rail-width: var(--desk-header-height);
   --desk-radius-sm: 10px;
   --desk-radius: 16px;
   --desk-radius-lg: 22px;
@@ -76,9 +79,12 @@
   --desk-chrome-bg: #101010;
   --desk-panel-bg: #191919;
   --desk-border: #333333;
+  /* 选中/悬浮边框：比常规边框稍强，但避免纯黑 */
+  --desk-border-strong: #4a4a4a;
   --desk-border-soft: rgba(255, 255, 255, 0.09);
   --desk-text: #ececec;
   --desk-text-secondary: #b0b0b0;
+  --desk-text-submenu: #c6c6c6;
   --desk-text-tertiary: #8a8a8a;
   /* 深色主题沿用黑白灰：主色取浅灰，主色背景用深色文字保证对比度 */
   --desk-primary: #e8e8e8;

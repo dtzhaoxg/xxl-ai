@@ -9,7 +9,8 @@ import { eq } from 'drizzle-orm'
 import { getDb } from '../db'
 import { providerTable } from '../db/schema'
 import { decryptSecret, encryptSecret } from './securityService'
-import { normalizeBaseUrl, USER_AGENT } from '../agent/worker/models'
+import { normalizeBaseUrl, USER_AGENT } from '@shared/providerUrl'
+import { isTimeoutError, requestWithTimeout } from '../utils/http'
 import { getSettings, saveSettings } from './settingsService'
 import type { ProviderDTO, ProviderModelQuery } from '@shared/ipc'
 
@@ -32,7 +33,7 @@ function parseHeaders(raw: string): Record<string, string> {
   return {}
 }
 
-/* 行记录 → DTO（解密密钥、解析模型列表与请求Header） */
+/* 行记录 → DTO（解码密钥、解析模型列表与请求Header） */
 function toDTO(row: ProviderRow): ProviderDTO {
   let models: string[] = []
   try {
@@ -76,8 +77,8 @@ export function saveProvider(input: Partial<ProviderDTO>): ProviderDTO {
   const id = input.id || randomUUID()
   const existing = db.select().from(providerTable).where(eq(providerTable.id, id)).get()
 
-  const apiKey =
-    input.apiKey !== undefined ? encryptSecret(input.apiKey) : (existing?.apiKey ?? '')
+  /* 未传 apiKey 表示保持原值；显式空串表示清空 */
+  const apiKey = input.apiKey !== undefined ? encryptSecret(input.apiKey) : (existing?.apiKey ?? '')
   const record = {
     id,
     name: input.name ?? existing?.name ?? '未命名供应商',
@@ -117,7 +118,7 @@ export async function fetchRemoteModels(input: ProviderModelQuery): Promise<stri
     const existing = getProvider(input.id)
     if (existing) {
       baseUrl = baseUrl || existing.baseUrl
-      apiKey = apiKey || existing.apiKey
+      apiKey = apiKey || existing.apiKey || ''
       headers = Object.keys(headers).length > 0 ? headers : existing.headers
     }
   }
@@ -127,17 +128,17 @@ export async function fetchRemoteModels(input: ProviderModelQuery): Promise<stri
   }
 
   /* 统一携带 User-Agent，标识 Desk 客户端（压过自定义同名头） */
-  const requestHeaders: Record<string, string> = { ...headers, 'User-Agent': USER_AGENT }
+  const requestHeaders: Record<string, string> = {
+    ...headers,
+    'User-Agent': USER_AGENT
+  }
   if (apiKey) {
     requestHeaders.Authorization = `Bearer ${apiKey}`
   }
 
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 15000)
   try {
-    const response = await fetch(`${normalizeBaseUrl(baseUrl)}/models`, {
-      headers: requestHeaders,
-      signal: controller.signal
+    const response = await requestWithTimeout(`${normalizeBaseUrl(baseUrl)}/models`, {
+      headers: requestHeaders
     })
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`)
@@ -152,8 +153,11 @@ export async function fetchRemoteModels(input: ProviderModelQuery): Promise<stri
         ? data.models.map((item) => item.name ?? item.model)
         : []
     return Array.from(new Set(ids.filter((id): id is string => Boolean(id))))
-  } finally {
-    clearTimeout(timer)
+  } catch (error) {
+    if (isTimeoutError(error)) {
+      throw new Error('请求供应商模型列表超时，请检查网络或接口地址')
+    }
+    throw error as Error
   }
 }
 

@@ -10,7 +10,7 @@ export interface ProviderDTO {
   name: string
   /* 接口基址（OpenAI 兼容端点） */
   baseUrl: string
-  /* 访问密钥（落库加密，读取时解密） */
+  /* 访问密钥（base64 编码存储，读取时解码） */
   apiKey: string
   /* 附加请求头（支持 {session} 等占位） */
   headers: Record<string, string>

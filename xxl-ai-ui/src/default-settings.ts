@@ -15,7 +15,7 @@ export default {
   /**
    * 版本
    */
-  version: '1.2.1-SNAPSHOT',
+  version: '1.3.1-SNAPSHOT',
 
   /**
    * 首页路径

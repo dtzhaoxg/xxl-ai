@@ -8,13 +8,17 @@ import { app, dialog, ipcMain, shell, type BrowserWindow } from 'electron'
 import { IPC } from '@shared/ipc'
 import type {
   AppSettings,
+  BrowserAction,
   ChatApprovalChoice,
+  McpDTO,
+  McpDiscoverQuery,
   ProviderDTO,
   ProviderModelQuery,
   ProjectCreateInput,
   RuntimeExecInput,
   RuntimeInfo,
   SessionDTO,
+  SkillDiscoverQuery,
   StoredMessage,
   TerminalCreateInput
 } from '@shared/ipc'
@@ -29,7 +33,6 @@ import {
   saveProvider
 } from './services/providerService'
 import {
-  clearMessages,
   createSession,
   deleteMessages,
   deleteSession,
@@ -45,26 +48,66 @@ import {
   renameProject
 } from './services/projectService'
 import {
+  attachTerminal,
   createTerminal,
   disposeAllTerminals,
   disposeTerminal,
+  listTerminals,
   onTerminalEvent,
+  reassignTerminals,
   resizeTerminal,
   writeTerminal
 } from './services/terminalService'
 import { listDir, readFile, writeFile } from './services/fsService'
 import { initFsWatch, unwatchDir, watchDir } from './services/fsWatchService'
 import { listOpenWithApps, openWith } from './services/openWithService'
-import { abortChat, respondApproval, sendChat } from './services/chatService'
+import { abortChat, discardSessionRuns, respondApproval, sendChat } from './services/chatService'
+import { deleteMcp, listMcps, saveMcp } from './services/mcpService'
+import { listMcpTools, testMcp } from './services/mcpRuntimeService'
+import { discoverMcp, discoverMcpDetail, listMcpCategories } from './services/mcpDiscoverService'
+import {
+  deleteSkill,
+  getSkillContent,
+  getSkillDetail,
+  getSkillRevealPath,
+  importSkillsFromDirectory,
+  importSkillsFromZip,
+  listSkills,
+  refreshSkills,
+  setSkillEnabled
+} from './services/skillService'
+import {
+  discoverSkillDetail,
+  discoverSkills,
+  installDiscoveredSkill
+} from './services/skillDiscoverService'
 import {
   clearSessionPermissions,
   disposeAgentRuntime,
   evictAgent,
-  resetAgents
+  resetAgents,
+  setBrowserOpener
 } from './agent/host/runtimeHost'
+import { resolveBrowserAction, setBrowserActionSender } from './agent/host/browserBridge'
 
 /* 注册全部 IPC 处理器 */
 export function registerIpc(getWindow: () => BrowserWindow | null): void {
+  /* Agent 工具 open_browser：把 URL 交给渲染层，在对应会话的浏览器面板打开（可指定新建标签页） */
+  setBrowserOpener((sessionId, url, newTab) => {
+    getWindow()?.webContents.send(IPC.browserOpenTab, {
+      sessionId,
+      url,
+      newTab
+    })
+  })
+  /* Agent 浏览器动作：请求转渲染层执行，结果经 browserActionResult 回传 */
+  setBrowserActionSender((request) => {
+    getWindow()?.webContents.send(IPC.browserActionRequest, request)
+  })
+  ipcMain.handle(IPC.browserActionResult, (_event, requestId: string, result) =>
+    resolveBrowserAction(requestId, result)
+  )
+
   ipcMain.handle(
     IPC.appInfo,
     (): RuntimeInfo => ({
@@ -127,8 +170,12 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle(IPC.settingsGet, () => getSettings())
   ipcMain.handle(IPC.settingsSave, (_event, patch: Partial<AppSettings>) => {
     const saved = saveSettings(patch)
-    /* 自定义指令变更后清空运行时缓存，使全部会话（含旧对话）下次对话即生效 */
-    if (patch.systemPrompt !== undefined) {
+    /* 自定义指令与内置工具开关变更后清空运行时缓存，使全部会话（含旧对话）下次对话即生效 */
+    if (
+      patch.systemPrompt !== undefined ||
+      patch.builtinToolBrowserEnabled !== undefined ||
+      patch.builtinToolGeneralEnabled !== undefined
+    ) {
       resetAgents()
     }
     return saved
@@ -168,13 +215,15 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return createProject({ name: input?.name, path })
   })
   ipcMain.handle(IPC.projectRename, (_event, id: string, name: string) => renameProject(id, name))
-  ipcMain.handle(IPC.projectRemove, (_event, id: string) => {
-    /* 级联删除前先清理项目下会话的运行时 Agent 缓存与越界白名单 */
+  ipcMain.handle(IPC.projectRemove, async (_event, id: string) => {
+    /* 级联删除前先终止项目下会话的运行中轮次，并清理运行时 Agent 缓存与越界白名单 */
     const removed = deleteProject(id)
-    removed.forEach((sessionId) => {
+    for (const sessionId of removed) {
+      discardSessionRuns(sessionId)
+      await abortChat(sessionId)
       evictAgent(sessionId)
       clearSessionPermissions(sessionId)
-    })
+    }
   })
   ipcMain.handle(IPC.projectReveal, (_event, id: string) => {
     /* 在系统文件管理器中展示项目目录（macOS Finder / Windows 资源管理器 / Linux 文件管理器） */
@@ -187,7 +236,10 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   /* --- 会话 --- */
   ipcMain.handle(IPC.sessionList, () => listSessions())
   ipcMain.handle(IPC.sessionCreate, (_event, input?: Partial<SessionDTO>) => createSession(input))
-  ipcMain.handle(IPC.sessionUpdate, (_event, id: string, patch: Partial<SessionDTO>) => {
+  ipcMain.handle(IPC.sessionUpdate, async (_event, id: string, patch: Partial<SessionDTO>) => {
+    /* 模型/模式变更可能影响正在运行的一轮：先终止并丢弃回写，再更新配置 */
+    discardSessionRuns(id)
+    await abortChat(id)
     evictAgent(id)
     return updateSession(id, patch)
   })
@@ -202,13 +254,10 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle(IPC.sessionMessages, (_event, sessionId: string): StoredMessage[] =>
     listMessages(sessionId)
   )
-  ipcMain.handle(IPC.sessionClear, (_event, sessionId: string) => {
-    evictAgent(sessionId)
-    clearSessionPermissions(sessionId)
-    clearMessages(sessionId)
-  })
-  ipcMain.handle(IPC.sessionDeleteMessages, (_event, sessionId: string, ids: string[]) => {
-    /* 删除消息后清空运行时缓存，使对话上下文与存储一致 */
+  ipcMain.handle(IPC.sessionDeleteMessages, async (_event, sessionId: string, ids: string[]) => {
+    /* 删除消息后终止运行中轮次并清空运行时缓存，使对话上下文与存储一致 */
+    discardSessionRuns(sessionId)
+    await abortChat(sessionId)
     evictAgent(sessionId)
     deleteMessages(sessionId, ids)
   })
@@ -226,12 +275,17 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   )
 
   /* --- 终端（本地 PTY） --- */
-  ipcMain.handle(IPC.terminalCreate, (_event, input?: TerminalCreateInput) => createTerminal(input))
+  ipcMain.handle(IPC.terminalCreate, (_event, input: TerminalCreateInput) => createTerminal(input))
+  ipcMain.handle(IPC.terminalList, (_event, sessionId: string) => listTerminals(sessionId))
+  ipcMain.handle(IPC.terminalAttach, (_event, id: string) => attachTerminal(id))
   ipcMain.handle(IPC.terminalWrite, (_event, id: string, data: string) => writeTerminal(id, data))
   ipcMain.handle(IPC.terminalResize, (_event, id: string, cols: number, rows: number) =>
     resizeTerminal(id, cols, rows)
   )
   ipcMain.handle(IPC.terminalDispose, (_event, id: string) => disposeTerminal(id))
+  ipcMain.handle(IPC.terminalReassign, (_event, fromSessionId: string, toSessionId: string) =>
+    reassignTerminals(fromSessionId, toSessionId)
+  )
   /* 终端输出/退出事件统一转发到渲染窗口 */
   onTerminalEvent((event) => {
     getWindow()?.webContents.send(IPC.terminalEvent, event)
@@ -258,4 +312,60 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle(IPC.shellOpenWith, (_event, appPath: string, file: string) =>
     openWith(appPath, file)
   )
+
+  /* --- MCP 插件中心（保存即生效：清空运行时缓存，下一轮对话重建工具） --- */
+  ipcMain.handle(IPC.mcpList, () => listMcps())
+  ipcMain.handle(IPC.mcpSave, (_event, dto: Partial<McpDTO>) => {
+    const saved = saveMcp(dto)
+    resetAgents()
+    return saved
+  })
+  ipcMain.handle(IPC.mcpRemove, (_event, id: string) => {
+    deleteMcp(id)
+    resetAgents()
+  })
+  ipcMain.handle(IPC.mcpTest, (_event, dto: Partial<McpDTO>) => testMcp(dto))
+  ipcMain.handle(IPC.mcpTools, (_event, id: string) => listMcpTools(id))
+  ipcMain.handle(IPC.mcpDiscover, (_event, query: McpDiscoverQuery) => discoverMcp(query))
+  ipcMain.handle(IPC.mcpCategories, () => listMcpCategories())
+  ipcMain.handle(IPC.mcpDetail, (_event, slug: string) => discoverMcpDetail(slug))
+
+  /* --- SKILL 技能中心（导入 / 启停 / 删除均由 service 统一失效运行时缓存） --- */
+  ipcMain.handle(IPC.skillList, () => listSkills())
+  ipcMain.handle(IPC.skillDetail, (_event, id: string) => getSkillDetail(id))
+  ipcMain.handle(IPC.skillContent, (_event, id: string, offset: number) =>
+    getSkillContent(id, offset)
+  )
+  ipcMain.handle(IPC.skillImportDir, async () => {
+    const result = await dialog.showOpenDialog({
+      title: '选择技能目录',
+      properties: ['openDirectory']
+    })
+    if (result.canceled || result.filePaths.length === 0) {
+      return null
+    }
+    return importSkillsFromDirectory(result.filePaths[0])
+  })
+  ipcMain.handle(IPC.skillImportZip, async () => {
+    const result = await dialog.showOpenDialog({
+      title: '选择技能 Zip 文件',
+      properties: ['openFile'],
+      filters: [{ name: 'Zip', extensions: ['zip'] }]
+    })
+    if (result.canceled || result.filePaths.length === 0) {
+      return null
+    }
+    return importSkillsFromZip(result.filePaths[0])
+  })
+  ipcMain.handle(IPC.skillSetEnabled, (_event, id: string, enabled: boolean) =>
+    setSkillEnabled(id, enabled)
+  )
+  ipcMain.handle(IPC.skillRemove, (_event, id: string) => deleteSkill(id))
+  ipcMain.handle(IPC.skillReveal, (_event, id: string) => {
+    shell.showItemInFolder(getSkillRevealPath(id))
+  })
+  ipcMain.handle(IPC.skillRefresh, () => refreshSkills())
+  ipcMain.handle(IPC.skillDiscover, (_event, query: SkillDiscoverQuery) => discoverSkills(query))
+  ipcMain.handle(IPC.skillDiscoverDetail, (_event, id: string) => discoverSkillDetail(id))
+  ipcMain.handle(IPC.skillInstall, (_event, id: string) => installDiscoveredSkill(id))
 }

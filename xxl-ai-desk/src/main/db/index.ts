@@ -1,13 +1,14 @@
 /*
  * 本地数据库初始化：better-sqlite3 + Drizzle，桌面端单文件库、无需外部服务。
- *   - 打开数据库后执行建表 DDL，再对旧库做兼容迁移。
+ *   - 打开数据库后执行建表 DDL，并写入内置 MCP 种子。
  */
 
 import { mkdirSync } from 'fs'
+import { homedir } from 'os'
 import { dirname } from 'path'
 import Database from 'better-sqlite3'
 import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
-import { getDbFile } from '../config/paths'
+import { getDbFile, getSkillsDir } from '../config/paths'
 import * as schema from './schema'
 
 /* SQLite 建表脚本：桌面端本地库，无需外部服务 */
@@ -56,6 +57,38 @@ CREATE TABLE IF NOT EXISTS desk_setting (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL DEFAULT ''
 );
+CREATE TABLE IF NOT EXISTS desk_mcp (
+  id          TEXT PRIMARY KEY,
+  name        TEXT NOT NULL DEFAULT '',
+  type        TEXT NOT NULL DEFAULT 'remote',
+  transport   TEXT NOT NULL DEFAULT 'streamable-http',
+  url         TEXT NOT NULL DEFAULT '',
+  headers     TEXT NOT NULL DEFAULT '{}',
+  command     TEXT NOT NULL DEFAULT '',
+  args        TEXT NOT NULL DEFAULT '[]',
+  env         TEXT NOT NULL DEFAULT '{}',
+  cwd         TEXT NOT NULL DEFAULT '',
+  config      TEXT NOT NULL DEFAULT '{}',
+  remark      TEXT NOT NULL DEFAULT '',
+  enabled     INTEGER NOT NULL DEFAULT 0,
+  health      TEXT NOT NULL DEFAULT '',
+  add_time    TEXT NOT NULL DEFAULT '',
+  update_time TEXT NOT NULL DEFAULT ''
+);
+CREATE UNIQUE INDEX IF NOT EXISTS i_desk_mcp_name ON desk_mcp (name);
+CREATE TABLE IF NOT EXISTS desk_skill (
+  id          TEXT PRIMARY KEY,
+  name        TEXT NOT NULL DEFAULT '',
+  description TEXT NOT NULL DEFAULT '',
+  version     TEXT NOT NULL DEFAULT '',
+  source      TEXT NOT NULL DEFAULT 'local',
+  source_id   TEXT NOT NULL DEFAULT '',
+  enabled     INTEGER NOT NULL DEFAULT 1,
+  add_time    TEXT NOT NULL DEFAULT '',
+  update_time TEXT NOT NULL DEFAULT ''
+);
+CREATE UNIQUE INDEX IF NOT EXISTS i_desk_skill_source_id ON desk_skill (source_id) WHERE source_id <> '';
+CREATE INDEX IF NOT EXISTS i_desk_skill_enabled ON desk_skill (enabled);
 `
 
 /* 原生 better-sqlite3 连接（迁移直接执行 SQL 用） */
@@ -67,37 +100,91 @@ let database: BetterSQLite3Database<typeof schema> | null = null
 export function initDatabase(): void {
   const file = getDbFile()
   mkdirSync(dirname(file), { recursive: true })
+  /* 技能统一维护在数据目录下的 skills（与数据库同生命周期） */
+  mkdirSync(getSkillsDir(), { recursive: true })
   sqlite = new Database(file)
   sqlite.pragma('journal_mode = WAL')
   sqlite.exec(DDL)
-  migrate(sqlite)
+  seedMcpServers(sqlite)
   database = drizzle(sqlite, { schema })
 }
 
-/*
- * 兼容旧库的结构迁移：SQLite 无 ADD COLUMN IF NOT EXISTS，用 PRAGMA 检测缺失列后补列。
- *   新增列须同时更新上方 DDL（新库直建）与此处（旧库补齐）。
- */
-function migrate(db: Database.Database): void {
-  ensureColumn(db, 'desk_session', 'mode', "TEXT NOT NULL DEFAULT 'build'")
-  /* 系统指令改为实时读取全局设置，废弃会话级 system_prompt 列 */
-  dropColumn(db, 'desk_session', 'system_prompt')
-}
+/* 内置 MCP 初始化标记：写入成功后不再重置，避免用户删除后被重新写回 */
+const MCP_SEED_KEY = 'seed.mcp'
 
-/* 检测并补充缺失列（已存在则跳过） */
-function ensureColumn(db: Database.Database, table: string, column: string, definition: string): void {
-  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
-  if (!columns.some((item) => item.name === column)) {
-    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
+/* 内置 MCP 种子：首次初始化写入 3 个常用 MCP（Fetch / Filesystem / Playwright） */
+function seedMcpServers(db: Database.Database): void {
+  const seeded = db.prepare('SELECT 1 FROM desk_setting WHERE key = ?').get(MCP_SEED_KEY)
+  if (seeded) {
+    return
   }
-}
 
-/* 检测并删除废弃列（不存在则跳过；SQLite 3.35+ 支持 DROP COLUMN） */
-function dropColumn(db: Database.Database, table: string, column: string): void {
-  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
-  if (columns.some((item) => item.name === column)) {
-    db.exec(`ALTER TABLE ${table} DROP COLUMN ${column}`)
-  }
+  const now = new Date().toISOString()
+  /* Filesystem 服务限定用户主目录，随安装机器自动适配 */
+  const servers = [
+    {
+      id: 'seed-mcp-fetch',
+      name: 'Fetch MCP Server',
+      command: 'uvx',
+      args: ['mcp-server-fetch'],
+      /* 内置默认关闭：需现场安装 Python 依赖（uvx），由用户按需开启 */
+      enabled: 0,
+      remark:
+        '网页抓取：获取网页内容并转换为 Markdown 返回给 Agent，适合阅读和总结网页。依赖本机可用的 uv/uvx。'
+    },
+    {
+      id: 'seed-mcp-filesystem',
+      name: 'Filesystem MCP Server',
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-filesystem', homedir()],
+      /* 内置默认关闭：涉及本地文件读写，由用户按需开启 */
+      enabled: 0,
+      remark:
+        '本地文件：支持读取、写入、编辑、移动与搜索文件，访问范围仅限当前用户主目录，防止越界访问。依赖 Node.js/npx。'
+    },
+    {
+      id: 'seed-mcp-playwright',
+      name: 'Playwright MCP Server',
+      command: 'npx',
+      args: ['@playwright/mcp@latest', '--headless'],
+      /* 内置默认关闭：需下载浏览器且资源占用较高，由用户按需开启 */
+      enabled: 0,
+      remark:
+        '浏览器自动化：支持打开网页、点击、填表、截图并读取页面内容，由 Microsoft 官方维护。默认无头模式（不弹出浏览器窗口），移除 --headless 参数即可改为可见窗口。首次运行会下载 Chromium，依赖 Node.js/npx。'
+    }
+  ]
+
+  /* 幂等写入：主键或名称已存在时跳过，不覆盖用户已修改的配置 */
+  const insert = db.prepare(`
+    INSERT OR IGNORE INTO desk_mcp
+      (id, name, type, transport, url, headers, command, args, env, cwd, config, remark, enabled, health, add_time, update_time)
+    VALUES (?, ?, 'local', 'stdio', '', '{}', ?, ?, '{}', '', ?, ?, ?, '', ?, ?)
+  `)
+  const markSeeded = db.prepare('INSERT OR REPLACE INTO desk_setting (key, value) VALUES (?, ?)')
+
+  db.transaction(() => {
+    for (const server of servers) {
+      const config = JSON.stringify({
+        transport: 'stdio',
+        command: server.command,
+        args: server.args,
+        env: {},
+        cwd: ''
+      })
+      insert.run(
+        server.id,
+        server.name,
+        server.command,
+        JSON.stringify(server.args),
+        config,
+        server.remark,
+        server.enabled,
+        now,
+        now
+      )
+    }
+    markSeeded.run(MCP_SEED_KEY, now)
+  })()
 }
 
 /* 获取 Drizzle 实例 */
