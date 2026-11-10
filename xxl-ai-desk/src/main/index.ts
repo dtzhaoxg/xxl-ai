@@ -3,26 +3,33 @@
 import { app, BrowserWindow, nativeImage, shell } from 'electron'
 import { existsSync } from 'fs'
 import { join } from 'path'
-import log from 'electron-log/main'
-import { IPC } from '@shared/ipc'
-import { APP_NAME } from '@shared/appInfo'
-import { initDatabase } from './db'
-import { registerIpc } from './ipc'
-import { ensureSeedProviders } from './services/providerService'
-import { registerLocalFileProtocol } from './services/localFileProtocolService'
-import { disposeAllTerminals } from './services/terminalService'
-import { disposeAllFsWatch } from './services/fsWatchService'
-import { disposeAgentRuntime } from './agent/host/runtimeHost'
-import { disposeBrowserActions } from './agent/host/browserBridge'
+import './i18n'
+import { BROWSER_IPC } from '@modules/browser/shared'
+import { APP_NAME } from '@common/shared/appInfo'
+import { initDatabaseFromModules } from '@main/db'
+import { setMainLanguage } from '@common/main/i18n'
+import { getSettings } from '@modules/settings/main'
+import { purgeExpiredTraces } from '@modules/diagnostics/main'
+import { registerIpc } from '@main/ipc'
+import { cleanupGithubArchiveTemps } from '@modules/skill/main'
+import { ensureSeedProviders } from '@modules/provider/main'
+import { registerLocalFileProtocol } from '@modules/platform/main'
+import { disposeAllTerminals } from '@modules/terminal/main'
+import { disposeAllFsWatch } from '@modules/file/main'
+import { disposeAllNoteWatch } from '@modules/apps/note/main'
+import { disposeAllGitWatch } from '@modules/git/main'
+import { disposeAgentRuntime } from '@modules/agent/main'
+import { disposeBrowserActions } from '@modules/browser/main'
+import { initLogger } from '@common/main/utils/logger'
 
 /* 主窗口引用（未创建或已关闭时为 null） */
 let mainWindow: BrowserWindow | null = null
 
-/* 运行期应用图标路径：开发期取渲染层图标源 src/renderer/src/assets/icon.png；打包后取 resources/icon.png（由 electron-builder extraResources 注入） */
+/* 运行期应用图标路径：开发期取项目 resources/icon.png；打包后取 resources/icon.png（由 electron-builder extraResources 注入） */
 function resolveAppIconPath(): string | null {
   const iconPath = app.isPackaged
     ? join(process.resourcesPath, 'icon.png')
-    : join(app.getAppPath(), 'src', 'renderer', 'src', 'assets', 'icon.png')
+    : join(app.getAppPath(), 'resources', 'icon.png')
   return existsSync(iconPath) ? iconPath : null
 }
 
@@ -32,9 +39,9 @@ function createWindow(): void {
   const isMac = process.platform === 'darwin'
   const appIconPath = resolveAppIconPath()
   mainWindow = new BrowserWindow({
-    width: 1440,
-    height: 920,
-    minWidth: 1080,
+    width: 1512,
+    height: 944,
+    minWidth: 900,
     minHeight: 720,
     show: false,
     autoHideMenuBar: true,
@@ -125,8 +132,13 @@ if (!gotLock) {
 
   /* 应用就绪：初始化数据库、播种供应商、注册 IPC、建立窗口 */
   app.whenReady().then(() => {
-    log.initialize()
-    initDatabase()
+    initLogger()
+    initDatabaseFromModules()
+    /* 主进程错误文案语言：语言由配置决定且不支持运行时切换，启动时初始化一次 */
+    setMainLanguage(getSettings().language)
+    /* 清理过期模型通讯记录（开发者模式） */
+    purgeExpiredTraces()
+    cleanupGithubArchiveTemps()
     ensureSeedProviders()
     registerLocalFileProtocol()
     registerIpc(() => mainWindow)
@@ -139,7 +151,7 @@ if (!gotLock) {
       if (contents.getType() === 'webview') {
         contents.setWindowOpenHandler(({ url }) => {
           /* 页面内新窗口请求：始终新建标签页；sessionId 留空由渲染层按当前会话兜底 */
-          mainWindow?.webContents.send(IPC.browserOpenTab, {
+          mainWindow?.webContents.send(BROWSER_IPC.openTab, {
             sessionId: '',
             url,
             newTab: true
@@ -180,6 +192,8 @@ if (!gotLock) {
     void disposeAgentRuntime().finally(() => {
       disposeAllTerminals()
       disposeAllFsWatch()
+      disposeAllNoteWatch()
+      disposeAllGitWatch()
       app.quit()
     })
   })

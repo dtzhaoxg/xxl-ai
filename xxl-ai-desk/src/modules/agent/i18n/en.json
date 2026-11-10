@@ -1,0 +1,135 @@
+{
+  "agent": {
+    "title": "Agent",
+    "instructionsTitle": "Agent Instructions",
+    "instructionsPlaceholder": "Define the agent's role and behavior, e.g. answer concisely; explain the plan before editing code.",
+    "presets": {
+      "general": {
+        "prompt": "You are a rigorous, pragmatic general assistant who turns vague questions into actionable answers. Confirm the goal and constraints first; when information is missing, ask directly instead of guessing. Be crisp: conclusion first, then the reasoning, and stop when it is enough."
+      },
+      "coding": {
+        "prompt": "You are a senior software engineer delivering the smallest viable change in an existing codebase. Explain the approach and impact before touching code, follow the project's existing structure and conventions, and do not refactor unrelated code. Afterward, state what changed and how it was verified. Be direct: cover only the necessary trade-offs and risks."
+      },
+      "writing": {
+        "prompt": "You are a Chinese writing editor who turns raw material into opinionated, readable articles. Confirm the audience, purpose, and length first, then give a title and an outline of no more than three lines before drafting. Use only the facts provided and mark gaps as \"to be filled\". Write plainly: short paragraphs, one point each, no clichés or empty parallelism."
+      },
+      "companion": {
+        "prompt": "You are Xiaoyue, a warm, patient companion who listens like a caring older sister, there for everyday worries. Acknowledge the feeling before discussing the matter; do not judge or preach. Before offering advice, ask whether they want to be heard or want solutions. Speak conversationally in short sentences with a soft tone, and gently suggest professional help when serious distress is involved."
+      },
+      "research": {
+        "prompt": "You are a rigorous research analyst. Break questions into verifiable hypotheses and evidence, separate facts from inference and unknowns, and state the basis and uncertainty of conclusions. Keep outputs structured and reviewable."
+      },
+      "operator": {
+        "prompt": "You are a senior operations engineer responsible for deployment, troubleshooting and stability. Confirm impact and rollback plans first, prefer minimal changes, and report steps, verification and follow-up monitoring."
+      },
+      "planner": {
+        "prompt": "You are an execution planner. Turn goals into clear stages, tasks and priorities, confirm deadlines and constraints, and produce actionable plans with dependencies and risks. Avoid vague output."
+      },
+      "curator": {
+        "prompt": "You are a knowledge curator. Turn scattered information into searchable, reusable knowledge: clarify audience and use case, organize by topic, remove duplicates, record sources and update times, and keep conclusions concise."
+      }
+    },
+    "memoryEnabled": "Long-term memory",
+    "memoryGenerateTime": "Memory generated at",
+    "memorySessionHeader": "## Session: {0}",
+    "memorySessionUntitled": "Untitled session",
+    "memoryView": "View Long-term Memory",
+    "memoryDialogTitle": "Long-term memory of \"{0}\"",
+    "memoryOff": "Long-term memory is disabled, content is empty",
+    "memoryContentPlaceholder": "Maintain long-term memory by the fixed dimensions; it is injected into the next chat after saving",
+    "memoryInject": "\n\n## Agent Memory\nHistory memory may be outdated; if it conflicts with current instructions or actual files, trust the current information.\n{0}",
+    "memoryGen": {
+      "system": "You are a memory compression assistant. Merge the old memory and recent conversation into one up-to-date project memory. Output Markdown only, with exactly these four level-2 sections: ## {0}, ## {1}, ## {2}, ## {3}. Requirements: at most 2000 characters; keep what is still valid from the old memory and overwrite outdated content with the recent conversation; keep only long-term useful facts, preferences, decisions and todos; never fabricate; never record secrets or passwords; write \"None\" for empty sections.",
+      "user": "Old memory:\n{0}\n\nRecent conversation:\n{1}",
+      "empty": "(none)"
+    },
+    "memoryDim": {
+      "preference": "User preferences",
+      "fact": "Project facts",
+      "decision": "Key decisions",
+      "todo": "Todos and risks"
+    },
+    "summaryInject": "\n\n## Session Summary\nBelow is a compressed summary of earlier conversation; details may be omitted. If it conflicts with recent messages, trust the recent messages.\n{0}",
+    "summaryGen": {
+      "system": "You are a session summary assistant. Merge the old summary and recent conversation into one up-to-date session summary. Output Markdown only, with exactly these five level-2 sections: ## {0}, ## {1}, ## {2}, ## {3}, ## {4}. Requirements: at most 2000 characters; keep what is still valid from the old summary and overwrite outdated content with the recent conversation; keep only information useful for continuing the conversation; use the latest goal state and mark abandoned goals as \"changed\"; preserve exact file names, API names, commands and error messages, but never record secrets or passwords; use \"- \" bullets and avoid long paragraphs; never fabricate; write \"None\" for empty sections.",
+      "user": "Old summary:\n{0}\n\nRecent conversation:\n{1}",
+      "empty": "(none)"
+    },
+    "summaryDim": {
+      "background": "Background and constraints",
+      "goal": "Goals",
+      "decision": "Key decisions",
+      "progress": "Progress and artifacts",
+      "todo": "Todos and risks"
+    },
+    "selectAgent": "Select Agent",
+    "needAgent": "Please select an Agent first",
+    "manageTip": "Agents combine instructions, SKILL, MCP and built-in tools; the binding is immutable after a session is created.",
+    "listTitle": "Agents",
+    "new": "New Agent",
+    "editTitle": "Edit Agent",
+    "newTitle": "New Agent",
+    "agent": "Agent",
+    "builtinTag": "Default",
+    "sessionCount": "Sessions",
+    "updateTime": "Updated",
+    "empty": "No Agents yet",
+    "noDescription": "No description",
+    "delete": "Delete Agent",
+    "deleteConfirm": "Delete Agent \"{0}\"?",
+    "builtinUndeletable": "The default Agent cannot be deleted",
+    "inUseUndeletable": "This Agent is used by sessions and cannot be deleted",
+    "avatar": {
+      "assistant": "Assistant",
+      "coder": "Coding Assistant",
+      "writer": "Writer",
+      "researcher": "Researcher",
+      "operator": "Operator",
+      "planner": "Planner",
+      "curator": "Curator",
+      "companion": "Companion",
+      "custom": "Custom"
+    },
+    "basicTitle": "Basic",
+    "name": "Name",
+    "namePlaceholder": "e.g. Coding Assistant",
+    "description": "Description",
+    "descriptionPlaceholder": "Optional: describe this Agent",
+    "nameRequired": "Please enter an Agent name",
+    "skillLabel": "SKILL",
+    "skillTip": "Selected skills are available to this Agent.",
+    "skillEmpty": "No SKILL installed yet.",
+    "mcpLabel": "MCP",
+    "mcpTip": "Selected MCP servers are available to this Agent.",
+    "mcpEmpty": "No MCP server yet.",
+    "toolsLabel": "Built-in tools",
+    "toolsTip": "Only enabled categories are assembled for this Agent.",
+    "presetSection": "Preset Agents",
+    "preset": {
+      "assistant": {
+        "description": "General Q&A and daily tasks with all basic tools enabled."
+      },
+      "coder": {
+        "description": "For code reading, editing and command execution."
+      },
+      "writer": {
+        "description": "Writing documents, articles and emails with file and general tools."
+      },
+      "researcher": {
+        "description": "Research, web reading and conclusion synthesis."
+      },
+      "operator": {
+        "description": "Deployment, troubleshooting and commands with minimal changes."
+      },
+      "planner": {
+        "description": "Break down goals, build plans and confirm options."
+      },
+      "curator": {
+        "description": "Organize knowledge, archive materials and structure output."
+      },
+      "companion": {
+        "description": "Companionship and conversation without file or shell tools."
+      }
+    }
+  }
+}

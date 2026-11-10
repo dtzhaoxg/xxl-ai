@@ -1,0 +1,135 @@
+{
+  "agent": {
+    "title": "Agent",
+    "instructionsTitle": "Agent 指令",
+    "instructionsPlaceholder": "设定 Agent 的角色与行为，例如：回答简洁；修改代码前先说明方案。",
+    "presets": {
+      "general": {
+        "prompt": "你是严谨务实的通用助手，负责把模糊问题收敛成可执行答案。先确认目标与约束，信息不足就直接问，不臆测。表达干练：先结论，再依据，够用即止。"
+      },
+      "coding": {
+        "prompt": "你是资深软件工程师，负责在现有工程里交付最小可行改动。动手前说明方案与影响范围，遵循项目现有结构与规范，不顺手重构。完成后交代改动点与验证方式。表达直接，只讲必要的取舍与风险。"
+      },
+      "writing": {
+        "prompt": "你是中文写作编辑，负责把素材写成有观点、能读下去的文章。先确认读者、目的与篇幅，给出标题和三行内提纲再落笔。只用给定事实，缺的标「待补充」。语言直接，短段落，一段一个要点，不写套话和空洞排比。"
+      },
+      "companion": {
+        "prompt": "你叫小玥，是温暖耐心的知心姐姐，负责倾听和生活困惑的陪伴。先接住情绪再谈事，不评判、不说教；要给建议前先问对方是想被倾听还是要方法。说话口语化、短句、语气柔和，涉及严重心理困扰时建议寻求专业帮助。"
+      },
+      "research": {
+        "prompt": "你是严谨的研究分析师，负责把问题拆解为可验证的假设与证据。先明确研究目标与边界，区分事实、推断与未知；给出结论时说明依据与不确定性，不堆砌资料。输出结构化、可复核。"
+      },
+      "operator": {
+        "prompt": "你是资深工程运维，负责在现有环境中完成部署、排障与稳定性维护。先确认影响范围与回滚方案，操作前说明风险，优先最小变更；完成后交代执行步骤、验证结果与后续监控点。"
+      },
+      "planner": {
+        "prompt": "你是执行规划师，负责把目标拆成清晰的阶段、任务与优先级。先确认目标、截止时间与资源约束，给出可执行的计划、依赖关系与风险预案；计划要能直接落地，避免空泛。"
+      },
+      "curator": {
+        "prompt": "你是知识整理编辑，负责把零散信息整理成可检索、可复用的知识。先确认使用场景与受众，按主题归档、去重、标注来源与更新时间；保留关键结论与待补充项，语言简洁。"
+      }
+    },
+    "memoryEnabled": "长期记忆",
+    "memoryGenerateTime": "记忆生成时间",
+    "memorySessionHeader": "## 会话：{0}",
+    "memorySessionUntitled": "未命名会话",
+    "memoryView": "查看长期记忆",
+    "memoryDialogTitle": "「{0}」的长期记忆",
+    "memoryOff": "长期记忆已关闭，内容为空",
+    "memoryContentPlaceholder": "按固定维度维护长期记忆，保存后在下次对话注入",
+    "memoryInject": "\n\n## Agent 记忆\n以下为历史记忆，可能过时；如与当前指令或实际文件冲突，以当前信息为准。\n{0}",
+    "memoryGen": {
+      "system": "你是记忆压缩助手。请把「旧记忆」与「最近对话」合并成一份最新的项目记忆，只输出 Markdown，且必须包含以下四个二级标题章节：## {0}、## {1}、## {2}、## {3}。要求：总字数不超过 2000 字；保留旧记忆中仍然有效的信息，用新对话覆盖已过期的内容；只保留长期有用的事实、偏好、决策与待办；不得编造；不得记录密钥、口令等敏感信息；无内容的章节写「暂无」。",
+      "user": "旧记忆：\n{0}\n\n最近对话：\n{1}",
+      "empty": "（无）"
+    },
+    "memoryDim": {
+      "preference": "用户偏好",
+      "fact": "项目事实",
+      "decision": "关键决策",
+      "todo": "待办与风险"
+    },
+    "summaryInject": "\n\n## 会话摘要\n以下为此前对话的压缩摘要，可能省略细节；如与最近消息冲突，以最近消息为准。\n{0}",
+    "summaryGen": {
+      "system": "你是会话摘要助手。请把「旧摘要」与「最近对话」合并成一份最新的会话摘要，只输出 Markdown，且必须包含以下五个二级标题章节：## {0}、## {1}、## {2}、## {3}、## {4}。要求：总字数不超过 2000 字；保留旧摘要中仍然有效的信息，用新对话覆盖已过期的内容；只保留对继续对话有用的信息；目标以最新状态为准，已废弃的目标标注「已变更」；保留精确的文件名、接口名、命令与错误信息，但不得记录密钥、口令等敏感信息；每节用「- 」列表，不写长段落；不得编造；无内容的章节写「暂无」。",
+      "user": "旧摘要：\n{0}\n\n最近对话：\n{1}",
+      "empty": "（无）"
+    },
+    "summaryDim": {
+      "background": "背景与约束",
+      "goal": "目标",
+      "decision": "关键决策",
+      "progress": "进展与产物",
+      "todo": "待办与风险"
+    },
+    "selectAgent": "选择 Agent",
+    "needAgent": "请先选择 Agent",
+    "manageTip": "Agent 用于编排指令、SKILL、MCP 与内置工具；会话绑定后不可修改。",
+    "listTitle": "Agent 列表",
+    "new": "新建 Agent",
+    "editTitle": "编辑 Agent",
+    "newTitle": "新建 Agent",
+    "agent": "Agent",
+    "builtinTag": "默认",
+    "sessionCount": "关联会话",
+    "updateTime": "更新时间",
+    "empty": "暂无 Agent",
+    "noDescription": "暂无描述",
+    "delete": "删除 Agent",
+    "deleteConfirm": "确定删除 Agent「{0}」吗？",
+    "builtinUndeletable": "默认 Agent 不允许删除",
+    "inUseUndeletable": "该 Agent 已被会话使用，无法删除",
+    "avatar": {
+      "assistant": "通用助手",
+      "coder": "编程助手",
+      "writer": "文档写作",
+      "researcher": "研究分析",
+      "operator": "工程运维",
+      "planner": "计划执行",
+      "curator": "知识整理",
+      "companion": "陪伴交流",
+      "custom": "自定义"
+    },
+    "basicTitle": "基本信息",
+    "name": "名称",
+    "namePlaceholder": "例如：编程助手",
+    "description": "描述",
+    "descriptionPlaceholder": "可选：说明该 Agent 的用途",
+    "nameRequired": "请填写 Agent 名称",
+    "skillLabel": "SKILL",
+    "skillTip": "勾选后该 Agent 可使用对应技能；未勾选不参与对话。",
+    "skillEmpty": "暂无 SKILL，请先在扩展中心安装",
+    "mcpLabel": "MCP",
+    "mcpTip": "勾选后该 Agent 可连接对应 MCP 服务。",
+    "mcpEmpty": "暂无 MCP，请先在扩展中心添加",
+    "toolsLabel": "内置工具",
+    "toolsTip": "仅勾选的工具分类会装配给该 Agent。",
+    "presetSection": "预设 Agent",
+    "preset": {
+      "assistant": {
+        "description": "通用问答与日常任务，默认开启全部基础工具。"
+      },
+      "coder": {
+        "description": "面向代码阅读、修改与命令执行。"
+      },
+      "writer": {
+        "description": "文档、文章与邮件撰写，偏重文件与通用能力。"
+      },
+      "researcher": {
+        "description": "资料检索、网页阅读与结论整理。"
+      },
+      "operator": {
+        "description": "部署、排障与命令执行，强调最小变更。"
+      },
+      "planner": {
+        "description": "拆解目标、制定计划与候选方案确认。"
+      },
+      "curator": {
+        "description": "整理知识、归档资料与结构化输出。"
+      },
+      "companion": {
+        "description": "日常陪伴与对话，关闭文件与命令工具。"
+      }
+    }
+  }
+}

@@ -1,7 +1,6 @@
 package com.xxl.ai.api.business.supplier.service.impl;
 
 import com.xxl.ai.api.business.agent.mapper.AgentMapper;
-import com.xxl.ai.api.business.harness.llm.LlmModelFactory;
 import com.xxl.ai.api.business.supplier.mapper.SupplierModelMapper;
 import com.xxl.ai.api.business.supplier.model.adaptor.SupplierModelAdaptor;
 import com.xxl.ai.api.business.supplier.model.dto.SupplierModelDTO;
@@ -31,8 +30,6 @@ public class SupplierModelServiceImpl implements SupplierModelService {
     private SupplierModelMapper supplierModelMapper;
     @Resource
     private AgentMapper agentMapper;
-    @Resource
-    private LlmModelFactory llmModelFactory;
 
     /**
      * 分页查询模型列表
@@ -78,9 +75,6 @@ public class SupplierModelServiceImpl implements SupplierModelService {
 
         // insert model
         supplierModelMapper.insert(supplierModel);
-
-        // evict cache
-        llmModelFactory.evictSupplier(supplierId);
         return Response.ofSuccess();
     }
 
@@ -98,18 +92,8 @@ public class SupplierModelServiceImpl implements SupplierModelService {
                 return Response.ofFail("模型已被Agent使用，禁止删除");
             }
         }
-        Set<Long> supplierIds = ids.stream()
-                .map(supplierModelMapper::load)
-                .filter(java.util.Objects::nonNull)
-                .map(SupplierModel::getSupplierId)
-                .collect(Collectors.toSet());
-
         // delete model
         int ret = supplierModelMapper.deleteByIds(ids);
-        if (ret > 0) {
-            // evict cache
-            supplierIds.forEach(llmModelFactory::evictSupplier);
-        }
         return ret > 0 ? Response.ofSuccess() : Response.ofFail();
     }
 
@@ -132,10 +116,6 @@ public class SupplierModelServiceImpl implements SupplierModelService {
             }
         }
         int ret = supplierModelMapper.update(supplierModel);
-        if (ret > 0) {
-            // evict cache
-            llmModelFactory.evictSupplier(supplierModel.getSupplierId());
-        }
         return ret > 0 ? Response.ofSuccess() : Response.ofFail();
     }
 
@@ -175,7 +155,6 @@ public class SupplierModelServiceImpl implements SupplierModelService {
             count++;
         }
         if (count > 0) {
-            llmModelFactory.evictSupplier(supplierId);
             return Response.ofSuccess();
         }
         return Response.ofFail("所选模型均已导入，无需重复导入");

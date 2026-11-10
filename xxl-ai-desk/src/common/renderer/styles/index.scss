@@ -1,0 +1,1000 @@
+@use './theme-presets.scss';
+@use './tokens.scss';
+
+/* 全局样式与外壳布局 */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', sans-serif;
+  color: var(--desk-text);
+  background: var(--desk-bg);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  font-size: var(--desk-font-md);
+}
+
+/* --- 外壳布局：结构样式由 App / AppTopbar / SidebarShell 组件自身维护 --- */
+
+/* 拖拽调整侧栏宽度期间：禁用文本选中，统一为列宽光标 */
+body.resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+
+/* 拖拽调整底部面板高度期间：切换为行高光标 */
+body.resizing-vertical {
+  cursor: row-resize;
+}
+
+/* 自绘 SVG 图标：统一随文字色着色（尺寸由使用处覆盖） */
+.desk-svg-icon {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* 左侧栏子菜单列表容器（首页面板 / 通用子菜单共用） */
+.sidebar-list {
+  flex: 1;
+  padding: 0 10px;
+}
+
+/* 外壳图标按钮：顶栏、面板头部、侧栏等位置共用 */
+.icon-button {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--desk-text-tertiary);
+  font-size: var(--desk-icon-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.icon-button:hover {
+  background: var(--desk-primary-soft);
+  color: var(--desk-text);
+}
+
+/* 图标悬浮提示（左侧图标栏 / 顶栏）：浅色浮层 + 外阴影，与底层形成层次 */
+.desk-tooltip.el-popper {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border-color: var(--desk-border);
+  font-size: var(--desk-font-sm);
+  color: var(--desk-text);
+  box-shadow:
+    0 2px 6px color-mix(in srgb, var(--theme-shadow) 12%, transparent),
+    0 10px 28px color-mix(in srgb, var(--theme-shadow) 24%, transparent);
+}
+
+/* 浮层紧贴图标，不需要箭头 */
+.desk-tooltip .el-popper__arrow {
+  display: none;
+}
+
+/*
+ * 会话状态信息条弹层（会话统计 / Token 用量 / 上下文消耗）：
+ * 点击输入框下方指标胶囊打开；弹层挂载 body，无法使用组件 scoped 样式，
+ * 影响面仅限 .desk-metric-popper。
+ */
+.desk-metric-popper.el-popper {
+  padding: 12px 14px;
+  border-radius: 10px;
+  border-color: var(--desk-border);
+  background: var(--desk-surface-elevated);
+  color: var(--desk-text);
+  box-shadow:
+    0 2px 6px color-mix(in srgb, var(--theme-shadow) 12%, transparent),
+    0 10px 28px color-mix(in srgb, var(--theme-shadow) 24%, transparent);
+}
+
+.desk-metric-popper .el-popper__arrow {
+  display: none;
+}
+
+.desk-metric-popper .metric-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: var(--desk-font-sm);
+}
+
+.desk-metric-popper .metric-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.desk-metric-popper .metric-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--desk-text);
+  font-size: var(--desk-font-sm);
+  font-weight: 600;
+}
+
+.desk-metric-popper .metric-title-icon {
+  color: var(--desk-text-secondary);
+  font-size: var(--desk-icon-md);
+}
+
+.desk-metric-popper .metric-total {
+  color: var(--desk-text);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.desk-metric-popper .metric-divider {
+  height: 1px;
+  margin: 2px 0;
+  background: var(--desk-border-soft);
+}
+
+.desk-metric-popper .metric-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--desk-text-tertiary);
+}
+
+.desk-metric-popper .metric-value {
+  color: var(--desk-text-tertiary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.desk-metric-popper .metric-name {
+  white-space: nowrap;
+}
+
+/* 上下文占用：轨道 + 填充 + 内部分段（分项只决定填充内部比例） */
+.desk-metric-popper .context-bar {
+  display: block;
+  height: 6px;
+  margin: 2px 0 4px;
+  border-radius: 3px;
+  background: var(--desk-border-soft);
+  overflow: hidden;
+}
+
+.desk-metric-popper .context-bar-fill {
+  display: flex;
+  gap: 1px;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--desk-context-messages);
+  overflow: hidden;
+}
+
+.desk-metric-popper .context-bar-segment {
+  min-width: 0;
+  height: 100%;
+  border-radius: 2px;
+}
+
+.desk-metric-popper .context-bar-segment.system {
+  background: var(--desk-context-system);
+}
+
+.desk-metric-popper .context-bar-segment.tools {
+  background: var(--desk-context-tools);
+}
+
+.desk-metric-popper .context-bar-segment.messages {
+  background: var(--desk-context-messages);
+}
+
+.desk-metric-popper .context-legend {
+  margin-top: 2px;
+}
+
+.desk-metric-popper .legend-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.desk-metric-popper .legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.desk-metric-popper .legend-dot.system {
+  background: var(--desk-context-system);
+}
+
+.desk-metric-popper .legend-dot.tools {
+  background: var(--desk-context-tools);
+}
+
+.desk-metric-popper .legend-dot.messages {
+  background: var(--desk-context-messages);
+}
+
+
+/* 不可用（如无可后退/前进历史）：弱化且不可点 */
+.icon-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.icon-button:disabled:hover {
+  background: transparent;
+  color: var(--desk-text-tertiary);
+}
+
+
+/* --- 面板工具按钮：文件 / Git 工具栏共用 --- */
+.panel-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--desk-border);
+  border-radius: 8px;
+  background: var(--desk-bg);
+  color: var(--desk-text-secondary);
+  font-size: var(--desk-font-sm);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.panel-btn:hover:not(:disabled) {
+  background: var(--desk-primary-soft);
+  color: var(--desk-text);
+}
+
+.panel-btn.active {
+  background: var(--desk-segment-bg);
+  color: var(--desk-text);
+  border-color: var(--desk-segment-border);
+}
+
+.panel-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.panel-btn .chevron {
+  font-size: var(--desk-icon-xs);
+}
+
+/* --- 滚动条 --- */
+::-webkit-scrollbar {
+  width: var(--desk-scrollbar-size);
+  height: var(--desk-scrollbar-size);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--desk-border);
+  border-radius: 8px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--desk-text-tertiary);
+}
+
+/* --- 会话内搜索高亮（CSS Custom Highlight API） --- */
+::highlight(chat-search) {
+  background: color-mix(in srgb, var(--desk-warning) 28%, transparent);
+}
+
+::highlight(chat-search-active) {
+  background: color-mix(in srgb, var(--desk-warning) 68%, transparent);
+}
+
+/* --- Markdown 渲染 --- */
+.markdown-body {
+  font-size: var(--desk-font-base);
+  line-height: 1.75;
+  word-break: break-word;
+  /* 连续无空格的 URL / 长串也能在容器内换行 */
+  overflow-wrap: anywhere;
+}
+
+.markdown-body-content > :first-child {
+  margin-top: 0;
+}
+
+.markdown-body-content > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown-body p {
+  margin: 0.5em 0;
+}
+
+/* 正文图片：随容器自适应，避免超宽溢出 */
+.markdown-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--desk-radius-sm);
+  vertical-align: middle;
+}
+
+/* 行内小图（段落/列表内）用较小圆角，块级图片保持卡片圆角 */
+.markdown-body p img,
+.markdown-body li img {
+  border-radius: 6px;
+}
+
+/* 可点击放大的正文图片 */
+.markdown-body .md-image {
+  max-height: 420px;
+  object-fit: contain;
+  cursor: zoom-in;
+}
+
+/* 正文音视频：等比自适应，视频限高避免撑满对话区 */
+.markdown-body video,
+.markdown-body audio {
+  display: block;
+  max-width: 100%;
+  margin: 0.6em 0;
+  border-radius: var(--desk-radius-sm);
+}
+
+.markdown-body video {
+  max-height: 480px;
+  background: #000;
+}
+
+.markdown-body audio {
+  width: min(520px, 100%);
+}
+
+/*
+ * 图片预览（ElImageViewer 传送到 body，只能全局命中）：
+ * contain 模式只限制上限、不设固定宽高 —— 大图缩到舒适尺寸、小图保持原始像素不失真。
+ * Element Plus 以行内 max-width/max-height:100% 撑满画布，需用 !important 覆盖。
+ */
+.el-image-viewer__img[style*='max-width'] {
+  max-width: 85vw !important;
+  max-height: 85vh !important;
+  border-radius: var(--desk-radius-sm);
+}
+
+/* 图片加载失败占位 */
+.markdown-body .md-image-fallback {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border: 1px dashed var(--desk-border-strong);
+  border-radius: 6px;
+  color: var(--desk-text-tertiary);
+  font-size: var(--desk-font-xs);
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  margin: 1em 0 0.5em;
+  line-height: 1.4;
+  font-weight: 600;
+}
+
+.markdown-body h1 {
+  font-size: 1.5em;
+}
+
+.markdown-body h2 {
+  font-size: 1.32em;
+}
+
+.markdown-body h3 {
+  font-size: 1.18em;
+}
+
+.markdown-body h4 {
+  font-size: 1.06em;
+}
+
+.markdown-body h5,
+.markdown-body h6 {
+  font-size: 1em;
+  color: var(--desk-text-secondary);
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  padding-left: 1.4em;
+  margin: 0.5em 0;
+}
+
+/* 嵌套列表按层级区分符号，便于分辨结构 */
+.markdown-body ul {
+  list-style: disc;
+}
+
+.markdown-body ul ul {
+  list-style: circle;
+}
+
+.markdown-body ul ul ul {
+  list-style: square;
+}
+
+.markdown-body ol {
+  list-style: decimal;
+}
+
+.markdown-body ol ol {
+  list-style: lower-alpha;
+}
+
+.markdown-body ol ol ol {
+  list-style: lower-roman;
+}
+
+.markdown-body li {
+  margin: 0.25em 0;
+}
+
+.markdown-body li > p {
+  margin: 0.25em 0;
+}
+
+/* 列表内嵌代码块/引用：与父级内容对齐，避免顶格 */
+.markdown-body li > pre,
+.markdown-body li > blockquote {
+  margin: 0.5em 0;
+}
+
+/* 任务列表：只读复选框 + 与文字基线对齐 */
+.markdown-body .contains-task-list {
+  padding-left: 1.1em;
+  list-style: none;
+}
+
+.markdown-body .task-list-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.markdown-body .task-list-item-checkbox {
+  margin-top: 0.42em;
+  accent-color: var(--desk-primary);
+}
+
+.markdown-body a {
+  color: var(--desk-primary);
+  text-decoration: none;
+}
+
+.markdown-body a:hover {
+  text-decoration: underline;
+}
+
+/* 外链标记：提示将在系统浏览器中打开 */
+.markdown-body a.md-link-external::after {
+  content: '↗';
+  margin-left: 2px;
+  font-size: 0.8em;
+  color: var(--desk-text-tertiary);
+}
+
+.markdown-body code {
+  font-family: 'SFMono-Regular', ui-monospace, Menlo, Consolas, 'Cascadia Code',
+    'Liberation Mono', monospace;
+  font-size: 0.88em;
+  background: var(--desk-code-inline-bg);
+  padding: 0.16em 0.42em;
+  border-radius: 6px;
+}
+
+/* 代码块：主题化底色/边框，等宽字体，横向滚动 */
+.markdown-body pre {
+  background: var(--desk-code-bg);
+  color: var(--desk-code-text);
+  border: 1px solid var(--desk-code-border);
+  padding: 14px 16px;
+  border-radius: var(--desk-radius-sm);
+  overflow: auto;
+  margin: 0.8em 0;
+  line-height: 1.65;
+  /* 超长代码块默认限高，由头部「展开」按钮切换 */
+  max-height: 480px;
+  tab-size: 2;
+}
+
+.markdown-body pre code {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  color: inherit;
+  font-size: var(--desk-font-sm);
+}
+
+.markdown-body blockquote {
+  margin: 0.8em 0;
+  padding: 0.3em 1em;
+  border-left: 3px solid var(--desk-border-strong);
+  border-radius: 0 var(--desk-radius-sm) var(--desk-radius-sm) 0;
+  background: var(--desk-panel-bg);
+  color: var(--desk-text-secondary);
+}
+
+.markdown-body blockquote > :first-child {
+  margin-top: 0.2em;
+}
+
+.markdown-body blockquote > :last-child {
+  margin-bottom: 0.2em;
+}
+
+.markdown-body hr {
+  height: 0;
+  margin: 1.1em 0;
+  border: none;
+  border-top: 1px solid var(--desk-border);
+}
+
+/* 表格：外层横向滚动，宽表不撑破对话区；对齐由 markdown-it 行内样式决定 */
+.markdown-body .md-table-wrap {
+  margin: 0.8em 0;
+  overflow-x: auto;
+  border: 1px solid var(--desk-border);
+  border-radius: var(--desk-radius-sm);
+}
+
+.markdown-body table {
+  border-collapse: collapse;
+  width: max-content;
+  min-width: 100%;
+  margin: 0;
+  font-size: var(--desk-font-sm);
+}
+
+.markdown-body th,
+.markdown-body td {
+  border: 1px solid var(--desk-border);
+  padding: 6px 10px;
+  text-align: start;
+}
+
+.markdown-body th {
+  background: var(--desk-panel-bg);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.markdown-body tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--desk-panel-bg) 55%, transparent);
+}
+
+/* 脚注 */
+.markdown-body .footnotes-sep {
+  margin: 1.2em 0 0.6em;
+}
+
+.markdown-body .footnotes {
+  font-size: var(--desk-font-sm);
+  color: var(--desk-text-secondary);
+}
+
+.markdown-body .footnotes-list {
+  padding-left: 1.2em;
+}
+
+/* 公式：块级公式可横向滚动，避免宽公式溢出 */
+.markdown-body .katex {
+  font-size: 1.05em;
+}
+
+.markdown-body .katex-display {
+  margin: 0.8em 0;
+  padding: 2px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* 行内代码语义标签 */
+.markdown-body kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--desk-border-strong);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--desk-panel-bg);
+  font-family: 'SFMono-Regular', ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.85em;
+}
+
+.markdown-body mark {
+  padding: 0 2px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--code-yellow) 30%, transparent);
+  color: inherit;
+}
+
+/* 折叠块：Markdown 原始 HTML 中的 details/summary（已由消毒白名单放行） */
+.markdown-body details {
+  margin: 0.6em 0;
+  padding: 0.4em 0.8em;
+  border: 1px solid var(--desk-border);
+  border-radius: var(--desk-radius-sm);
+}
+
+.markdown-body summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+/* --- 代码高亮（GitHub 主题）：聊天代码块与文件编辑器共用同一套 token 配色 --- */
+.hljs {
+  color: var(--desk-code-text);
+}
+
+.hljs-comment,
+.hljs-quote {
+  color: var(--code-comment);
+}
+
+.hljs-doctag,
+.hljs-keyword,
+.hljs-formula,
+.hljs-template-tag,
+.hljs-template-variable,
+.hljs-type,
+.hljs-variable.language_ {
+  color: var(--code-red);
+}
+
+.hljs-title,
+.hljs-title.class_,
+.hljs-title.class_.inherited__,
+.hljs-title.function_ {
+  color: var(--code-purple);
+}
+
+.hljs-attr,
+.hljs-attribute,
+.hljs-literal,
+.hljs-meta,
+.hljs-number,
+.hljs-operator,
+.hljs-selector-attr,
+.hljs-selector-class,
+.hljs-selector-id,
+.hljs-variable {
+  color: var(--code-blue);
+}
+
+.hljs-meta .hljs-string,
+.hljs-regexp,
+.hljs-string {
+  color: var(--code-string);
+}
+
+.hljs-built_in,
+.hljs-symbol {
+  color: var(--code-orange);
+}
+
+.hljs-name,
+.hljs-selector-pseudo,
+.hljs-selector-tag {
+  color: var(--code-green);
+}
+
+.hljs-code {
+  color: var(--code-comment);
+}
+
+.hljs-subst,
+.hljs-params,
+.hljs-punctuation {
+  color: var(--code-subst);
+}
+
+.hljs-section {
+  color: var(--code-blue);
+  font-weight: 700;
+}
+
+/* 补充 token：对象属性 / 常量 / 标签 / 转义字符，避免回落为正文色 */
+.hljs-property,
+.hljs-variable.constant_ {
+  color: var(--code-blue);
+}
+
+.hljs-tag {
+  color: var(--code-green);
+}
+
+.hljs-char.escape_ {
+  color: var(--code-orange);
+}
+
+.hljs-bullet {
+  color: var(--code-yellow);
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: 700;
+}
+
+.hljs-addition {
+  color: var(--code-green);
+  background: rgba(46, 160, 67, 0.15);
+}
+
+.hljs-deletion {
+  color: var(--code-red);
+  background: rgba(248, 81, 73, 0.15);
+}
+
+/* --- 聊天代码块：GitHub 风格「语言标签 + 复制按钮」头部 --- */
+.markdown-body .code-block {
+  margin: 0.8em 0;
+  border: 1px solid var(--desk-code-border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--desk-code-bg);
+}
+
+.markdown-body .code-block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 34px;
+  padding: 0 8px 0 14px;
+  background: var(--desk-bg-elevated);
+  border-bottom: 1px solid var(--desk-code-border);
+}
+
+.markdown-body .code-lang {
+  font-family: 'SFMono-Regular', ui-monospace, Menlo, Consolas, monospace;
+  font-size: var(--desk-font-xs);
+  color: var(--desk-text-tertiary);
+  text-transform: lowercase;
+}
+
+.markdown-body .code-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.markdown-body .code-copy,
+.markdown-body .code-expand,
+.markdown-body .code-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--desk-text-secondary);
+  font-size: var(--desk-font-xs);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.markdown-body .code-copy:hover,
+.markdown-body .code-expand:hover,
+.markdown-body .code-wrap:hover {
+  background: var(--desk-primary-soft);
+  color: var(--desk-text);
+}
+
+.markdown-body .code-copy.copied {
+  color: #2da44e;
+}
+
+.markdown-body .code-block pre {
+  margin: 0;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+/* 展开后解除限高，按内容完整展示 */
+.markdown-body .code-block.is-expanded pre {
+  max-height: none;
+}
+
+/* 自动换行：长单行内容按容器宽度折行 */
+.markdown-body .code-block.is-wrapped pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.markdown-body .code-block pre code {
+  font-size: var(--desk-font-sm);
+  line-height: 1.65;
+}
+
+/* --- 通用工具类 --- */
+.text-secondary {
+  color: var(--desk-text-secondary);
+}
+
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* --- 深色主题下主色对比修正（主色为浅灰，实心主色 / 选中态文字改用深色） --- */
+html.dark .el-button--primary {
+  --el-button-text-color: var(--desk-primary-contrast);
+  --el-button-hover-text-color: var(--desk-primary-contrast);
+  --el-button-active-text-color: var(--desk-primary-contrast);
+}
+
+/* --- 主色对比修正 + 分段选中态（主题/语言），与保存按钮同色系、深浅主题均适用 --- */
+.el-radio-button {
+  --el-radio-button-checked-bg-color: var(--desk-segment-bg);
+  --el-radio-button-checked-text-color: var(--desk-segment-text);
+  --el-radio-button-checked-border-color: var(--desk-segment-border);
+}
+
+/* --- 开关激活色：柔和中性灰，非纯黑，且与关闭态可区分 --- */
+.el-switch {
+  --el-switch-on-color: var(--desk-switch-on);
+  --el-switch-off-color: var(--desk-border-strong);
+}
+
+/*
+ * --- 输入类控件：hover / focus 统一柔和描边 ---
+ * Element Plus 在组件内部把 focus 边框写死为 --el-color-primary，黑白主题下接近纯黑，
+ * 且悬浮边框默认取 disabled 文字色（偏深）。这里在组件层覆盖变量，避免出现突兀黑框；
+ * el-select 的聚焦态直接使用主色，需单独覆盖其 wrapper 阴影。
+ */
+.el-input,
+.el-textarea {
+  --el-input-hover-border-color: var(--desk-input-border-hover);
+  --el-input-focus-border-color: var(--desk-input-border-focus);
+}
+
+.el-select__wrapper.is-hovering:not(.is-focused) {
+  box-shadow: 0 0 0 1px var(--desk-input-border-hover) inset;
+}
+
+.el-select__wrapper.is-focused {
+  box-shadow: 0 0 0 1px var(--desk-input-border-focus) inset;
+}
+
+/* --- 表格：表面色 / 边框 / 悬浮态统一走主题令牌，避免组件默认灰与主题脱节 --- */
+.el-table {
+  --el-table-bg-color: transparent;
+  --el-table-tr-bg-color: transparent;
+  --el-table-header-bg-color: var(--desk-surface-panel);
+  --el-table-header-text-color: var(--desk-text-secondary);
+  --el-table-text-color: var(--desk-text);
+  --el-table-row-hover-bg-color: color-mix(in srgb, var(--desk-primary) 6%, transparent);
+  --el-table-border-color: var(--desk-border);
+}
+
+/* --- 主按钮：浅品牌底 + 明确边框，兼顾可点击感与克制感 --- */
+.el-button--primary:not(.is-text):not(.is-link) {
+  --el-button-bg-color: var(--desk-btn-bg);
+  --el-button-border-color: var(--desk-btn-border);
+  --el-button-text-color: var(--desk-btn-text);
+  --el-button-hover-bg-color: var(--desk-btn-bg-hover);
+  --el-button-hover-border-color: var(--desk-btn-border);
+  --el-button-hover-text-color: var(--desk-btn-text);
+  --el-button-active-bg-color: var(--desk-btn-bg-hover);
+  --el-button-active-border-color: var(--desk-btn-border);
+  --el-button-active-text-color: var(--desk-btn-text);
+  --el-button-disabled-bg-color: var(--desk-btn-bg);
+  --el-button-disabled-border-color: var(--desk-border);
+  --el-button-disabled-text-color: var(--desk-text-tertiary);
+}
+
+/* --- 按钮聚焦：Element Plus 默认 2px 深色焦点环（弹窗自动聚焦确认按钮时尤其显眼），统一去除 --- */
+.el-button:focus-visible {
+  outline: none;
+}
+
+/* --- 模型选择下拉：供应商为分组标题、模型缩进，体现两级层次 --- */
+.model-dropdown .provider-group {
+  font-size: var(--desk-font-xs);
+  color: var(--desk-text-tertiary);
+  cursor: default;
+}
+
+.model-dropdown .model-choice {
+  padding-left: 24px;
+}
+
+/* --- 项目排序下拉：分组标题与选中标记 --- */
+.sort-dropdown .sort-group {
+  font-size: var(--desk-font-xs);
+  color: var(--desk-text-tertiary);
+  cursor: default;
+}
+
+.sort-dropdown .sort-check {
+  margin-left: auto;
+  padding-left: 12px;
+  font-size: var(--desk-font-sm);
+  color: var(--desk-primary);
+}
+
+/* --- 权限选择下拉：完全权限项用危险色，提示越权风险 --- */
+.permission-dropdown .el-dropdown-menu__item.permission-danger,
+.permission-dropdown .el-dropdown-menu__item.permission-danger.picker-active {
+  color: var(--desk-danger);
+}
+
+.permission-dropdown .el-dropdown-menu__item.permission-danger.picker-active .el-icon {
+  color: var(--desk-danger);
+}
+
+.permission-dropdown .el-dropdown-menu__item.permission-danger:hover {
+  background: color-mix(in srgb, var(--desk-danger) 8%, transparent);
+  color: var(--desk-danger);
+}
+
+/* --- 下拉菜单选项：统一紧凑菜单字号，首图标与文字留白 --- */
+.el-dropdown-menu__item {
+  font-size: var(--desk-font-sm);
+}
+
+.el-dropdown-menu__item > .el-icon:first-child {
+  margin-right: 8px;
+}
+
+
+/*
+ * 弹层与窗口拖拽区：抽屉/对话框右上角关闭按钮位于全局顶栏的拖拽区（-webkit-app-region: drag）内，
+ * 真实鼠标点击会被窗口拖动吞掉（表现为「点 X 没反应」）。
+ * 仅在弹层真正可见时禁用顶栏拖拽：Element Plus 的 .el-overlay 常驻 DOM（关闭时 display:none），
+ * 不能用 `:has(.el-overlay)` 判断，否则顶栏会永久失去拖拽能力。
+ */
+.el-overlay,
+.el-drawer,
+.el-dialog {
+  -webkit-app-region: no-drag;
+}
+
+body:has(.el-overlay:not([style*='display: none'])) .desk-topbar {
+  -webkit-app-region: no-drag;
+}

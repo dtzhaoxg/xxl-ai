@@ -10,7 +10,9 @@ export default defineConfig({
     resolve: {
       alias: {
         '@main': resolve('src/main'),
-        '@shared': resolve('src/shared')
+        '@preload': resolve('src/preload'),
+        '@common': resolve('src/common'),
+        '@modules': resolve('src/modules')
       }
     },
     build: {
@@ -18,7 +20,7 @@ export default defineConfig({
         /* 双入口：主进程 + Agent 运行时进程（utilityProcess） */
         input: {
           index: resolve('src/main/index.ts'),
-          'agent/worker/worker': resolve('src/main/agent/worker/worker.ts')
+          'agent/worker/worker': resolve('src/modules/agent/worker/worker.ts')
         }
       }
     }
@@ -30,9 +32,16 @@ export default defineConfig({
     resolve: {
       alias: {
         '@renderer': resolve('src/renderer/src'),
-        '@shared': resolve('src/shared'),
+        '@common': resolve('src/common'),
+        '@modules': resolve('src/modules'),
+        /* 项目级静态资源（图标等），需与 electron-builder 打包资源保持一致 */
+        '@resources': resolve('resources'),
         '@': resolve('src/renderer/src')
       }
+    },
+    /* 渲染根目录为 src/renderer，允许读取项目根下的 resources 目录 */
+    server: {
+      fs: { allow: [resolve('.')] }
     },
     plugins: [vue()]
   }

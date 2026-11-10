@@ -1,0 +1,210 @@
+/*
+ * 设计令牌（语义层）
+ *
+ * 颜色种子见 theme-presets.scss；本文件负责：
+ *   1. 由 --theme-* 推导语义 token（区域 surface、边框、文本、主色、气泡、控件）；
+ *   2. 代码块 / 阴影 / 遮罩等与预设无关的外观变量；
+ *   3. 尺寸、字体与 Element Plus 基础变量。
+ *
+ * 组件只使用 --desk-*，禁止写死颜色；新增主题通常只需改 theme-presets.scss
+ * （代码块与终端选区为固定配色，不随主题变化）。
+ *
+ * 区域语义：
+ *   chrome   顶栏 + 左侧图标栏
+ *   sidebar  左侧子菜单 / 会话列表 / 右侧工具面板（工具面板与侧栏合并同一层级）
+ *   content  会话正文区
+ *   elevated 输入框 / 卡片 / 悬浮件
+ *
+ * @author xuxueli 2026-10-31
+ */
+
+/* 语义色映射：各主题共用，只依赖主题种子 */
+@mixin desk-color-tokens {
+  /* 区域表面 */
+  --desk-surface-chrome: var(--theme-chrome);
+  --desk-surface-sidebar: var(--theme-sidebar);
+  /* 工具面板与侧栏合并同一层级，不再单独维护 panel 种子 */
+  --desk-surface-panel: var(--theme-sidebar);
+  --desk-surface-content: var(--theme-content);
+  --desk-surface-elevated: var(--theme-elevated);
+  /* 兼容既有语义 token（组件逐步迁移到 surface-*） */
+  --desk-bg: var(--desk-surface-content);
+  --desk-bg-elevated: var(--desk-surface-elevated);
+  --desk-sidebar: var(--desk-surface-sidebar);
+  --desk-chrome-bg: var(--desk-surface-chrome);
+  --desk-panel-bg: var(--desk-surface-panel);
+
+  /* 边框 */
+  --desk-border: var(--theme-border);
+  --desk-border-strong: color-mix(in srgb, var(--theme-border) 42%, var(--theme-text-tertiary));
+  --desk-border-soft: color-mix(in srgb, var(--theme-border) 55%, transparent);
+  /* 输入控件 hover / focus 边框：只掺入少量品牌色，避免黑白主题下主色偏黑形成黑框 */
+  --desk-input-border-hover: color-mix(in srgb, var(--theme-brand) 10%, var(--theme-border));
+  --desk-input-border-focus: color-mix(in srgb, var(--theme-brand) 20%, var(--theme-border));
+
+  /* 文本 */
+  --desk-text: var(--theme-text);
+  --desk-text-secondary: var(--theme-text-secondary);
+  --desk-text-submenu: color-mix(in srgb, var(--theme-text) 72%, var(--theme-text-secondary));
+  --desk-text-tertiary: var(--theme-text-tertiary);
+
+  /* 品牌色 */
+  --desk-primary: var(--theme-brand);
+  --desk-primary-hover: var(--theme-brand-strong);
+  --desk-primary-soft: color-mix(in srgb, var(--theme-brand) 9%, transparent);
+  --desk-selected-bg: color-mix(in srgb, var(--theme-brand) 15%, transparent);
+  --desk-primary-contrast: var(--theme-brand-contrast);
+  /* 聚焦光晕：只做极淡提示，深色/黑白主题下避免形成第二圈灰边 */
+  --desk-focus-ring: 0 0 0 3px color-mix(in srgb, var(--theme-brand) 10%, transparent);
+
+  /* 功能色 */
+  --desk-success: var(--theme-success);
+  --desk-warning: var(--theme-warning);
+  --desk-danger: var(--theme-danger);
+  --desk-info: var(--theme-info);
+
+  /* 气泡与选区 */
+  --desk-bubble-user: color-mix(in srgb, var(--theme-brand) 9%, var(--theme-content));
+  --desk-bubble-user-text: var(--theme-text);
+  --desk-bubble-assistant: var(--theme-elevated);
+  --desk-selection: color-mix(in srgb, var(--theme-brand) 24%, transparent);
+  --desk-code-inline-bg: color-mix(in srgb, var(--theme-text) 7%, transparent);
+
+  /* 分段控件 / 按钮 / 开关 */
+  --desk-segment-bg: color-mix(in srgb, var(--theme-brand) 12%, var(--theme-content));
+  --desk-segment-text: var(--theme-brand-strong);
+  --desk-segment-border: color-mix(in srgb, var(--theme-brand) 22%, var(--theme-content));
+  /* 主按钮：浅品牌底 + 品牌边框 + 品牌字，清晰但不抢戏 */
+  --desk-btn-bg: color-mix(in srgb, var(--theme-brand) 8%, var(--theme-content));
+  --desk-btn-bg-hover: color-mix(in srgb, var(--theme-brand) 14%, var(--theme-content));
+  --desk-btn-border: color-mix(in srgb, var(--theme-brand) 22%, var(--theme-content));
+  --desk-btn-text: var(--theme-brand-strong);
+  --desk-switch-on: var(--theme-brand);
+
+  /* Element Plus 文本 / 边框 / 填充对齐主题，避免组件默认灰与主题色脱节 */
+  --el-text-color-primary: var(--desk-text);
+  --el-text-color-regular: var(--desk-text);
+  --el-text-color-secondary: var(--desk-text-secondary);
+  --el-text-color-placeholder: var(--desk-text-tertiary);
+  --el-text-color-disabled: var(--desk-text-tertiary);
+  --el-border-color: var(--desk-border);
+  --el-border-color-light: var(--desk-border);
+  --el-border-color-lighter: var(--desk-border-soft);
+  /* 输入控件悬浮边框：Element 默认取 text-color-disabled（偏深），统一换成柔和混色 */
+  --el-border-color-hover: var(--desk-input-border-hover);
+  --el-input-hover-border-color: var(--desk-input-border-hover);
+  --el-input-focus-border-color: var(--desk-input-border-focus);
+  --el-fill-color-light: var(--desk-primary-soft);
+  --el-fill-color-lighter: var(--desk-surface-elevated);
+  --el-fill-color-blank: var(--desk-surface-content);
+  --el-bg-color: var(--desk-surface-content);
+  --el-bg-color-overlay: var(--desk-surface-elevated);
+  /* 加载遮罩：取内容区表面的半透明色，避免深色蒙层把整块区域压黑（弹窗遮罩另用 --el-overlay-color-lighter） */
+  --el-mask-color: color-mix(in srgb, var(--desk-surface-content) 82%, transparent);
+
+  /* Element Plus 功能色：与主题功能色保持同一色相 */
+  --el-color-success: var(--theme-success);
+  --el-color-warning: var(--theme-warning);
+  --el-color-danger: var(--theme-danger);
+  --el-color-info: var(--theme-info);
+  --el-color-success-light-9: color-mix(in srgb, var(--theme-success) 12%, var(--desk-surface-content));
+  --el-color-warning-light-9: color-mix(in srgb, var(--theme-warning) 12%, var(--desk-surface-content));
+  --el-color-danger-light-9: color-mix(in srgb, var(--theme-danger) 12%, var(--desk-surface-content));
+  --el-color-info-light-9: color-mix(in srgb, var(--theme-info) 12%, var(--desk-surface-content));
+
+  /* Element Plus 主色族：浅色向白混合，深色向黑混合 */
+  --el-color-primary: var(--theme-brand);
+  --el-color-primary-light-3: color-mix(in srgb, var(--theme-brand) 72%, var(--theme-mix-base));
+  --el-color-primary-light-5: color-mix(in srgb, var(--theme-brand) 54%, var(--theme-mix-base));
+  --el-color-primary-light-7: color-mix(in srgb, var(--theme-brand) 36%, var(--theme-mix-base));
+  --el-color-primary-light-8: color-mix(in srgb, var(--theme-brand) 26%, var(--theme-mix-base));
+  --el-color-primary-light-9: color-mix(in srgb, var(--theme-brand) 12%, var(--theme-mix-base));
+  --el-color-primary-dark-2: color-mix(in srgb, var(--theme-brand) 78%, var(--theme-mix-strong));
+}
+
+:root {
+  @include desk-color-tokens;
+
+  /* 代码块（GitHub Light） */
+  --desk-code-bg: #f6f8fa;
+  --desk-code-text: #1f2328;
+  --desk-code-border: #d0d7de;
+  /* 语法高亮 token 色（GitHub Light） */
+  --code-red: #cf222e;
+  --code-purple: #8250df;
+  --code-blue: #0550ae;
+  --code-string: #0a3069;
+  --code-orange: #953800;
+  --code-comment: #6e7781;
+  --code-green: #116329;
+  --code-yellow: #735c0f;
+  --code-subst: #1f2328;
+
+  --desk-shadow: 0 10px 30px color-mix(in srgb, var(--theme-shadow) 8%, transparent);
+  /* 输入框 / 轻量卡片：贴近表面的柔和投影，避免大范围灰雾 */
+  --desk-shadow-soft:
+    0 1px 2px color-mix(in srgb, var(--theme-shadow) 4%, transparent),
+    0 4px 12px color-mix(in srgb, var(--theme-shadow) 5%, transparent);
+  --desk-overlay: color-mix(in srgb, var(--theme-text) 38%, transparent);
+  /* 终端选区：中性半透明，避免主题色在代码背景上过重 */
+  --desk-terminal-selection: rgba(24, 24, 27, 0.18);
+  /* 上下文占用分项：系统提示词 / 工具定义 / 对话消息（复用随主题适配的代码高亮色） */
+  --desk-context-system: var(--theme-text-tertiary);
+  --desk-context-tools: var(--code-purple);
+  --desk-context-messages: var(--code-blue);
+
+  /* 尺寸与字体 */
+  --desk-header-height: 38px;
+  /* 左侧图标栏：独立尺寸，不与顶栏高度绑定 */
+  --desk-rail-width: 44px;
+  --desk-sidebar-width: 240px;
+  --desk-panel-header-height: 40px;
+  --desk-scrollbar-size: 8px;
+  /* 会话内容列：正文滚动容器两侧对称预留滚动条空间，输入框用 content-gutter 补偿后与其等宽同中心 */
+  --desk-chat-width: 880px;
+  --desk-chat-gutter: 32px;
+  --desk-chat-content-gutter: calc(var(--desk-chat-gutter) + var(--desk-scrollbar-size));
+  --desk-radius-sm: 10px;
+  --desk-radius: 16px;
+  --desk-radius-lg: 22px;
+  --desk-font-xs: 12px;
+  --desk-font-sm: 13px;
+  --desk-font-base: 14px;
+  --desk-font-md: 15px;
+  --desk-font-lg: 18px;
+  --desk-font-xl: 22px;
+  --desk-icon-xs: 12px;
+  --desk-icon-sm: 14px;
+  --desk-icon-md: 16px;
+  --desk-icon-lg: 18px;
+
+  /* Element Plus 基础尺寸 */
+  --el-font-size-extra-small: var(--desk-font-xs);
+  --el-font-size-small: var(--desk-font-sm);
+  --el-font-size-base: var(--desk-font-md);
+  --el-border-radius-base: 10px;
+}
+
+:root.dark {
+  /* 代码块（GitHub Dark） */
+  --desk-code-bg: #161b22;
+  --desk-code-text: #e6edf3;
+  --desk-code-border: #30363d;
+  /* 语法高亮 token 色（GitHub Dark） */
+  --code-red: #ff7b72;
+  --code-purple: #d2a8ff;
+  --code-blue: #79c0ff;
+  --code-string: #a5d6ff;
+  --code-orange: #ffa657;
+  --code-comment: #8b949e;
+  --code-green: #7ee787;
+  --code-yellow: #f2cc60;
+  --code-subst: #e6edf3;
+
+  --desk-shadow: 0 12px 32px color-mix(in srgb, var(--theme-shadow) 55%, transparent);
+  --desk-shadow-soft:
+    0 1px 2px color-mix(in srgb, var(--theme-shadow) 35%, transparent),
+    0 6px 18px color-mix(in srgb, var(--theme-shadow) 45%, transparent);
+  --desk-overlay: rgba(0, 0, 0, 0.55);
+  --desk-terminal-selection: rgba(255, 255, 255, 0.24);
+}
