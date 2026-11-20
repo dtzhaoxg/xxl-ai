@@ -4,6 +4,7 @@
  */
 
 import { initDatabase } from '@common/main/db'
+import type { DatabaseInitResult } from '@common/main/db'
 import { AGENT_DDL } from '@modules/agent/main/ddl'
 import { APP_CENTER_DDL } from '@modules/appCenter/main/ddl'
 import { seedDefaultAgent } from '@modules/agent/main/seed'
@@ -12,14 +13,17 @@ import { DIAGNOSTICS_DDL } from '@modules/diagnostics/main/ddl'
 import { MCP_DDL } from '@modules/mcp/main/ddl'
 import { seedMcpServers } from '@modules/mcp/main/seed'
 import { PROJECT_DDL } from '@modules/project/main/ddl'
+import { ensureDefaultProject } from '@modules/project/main/seed'
 import { PROVIDER_DDL } from '@modules/provider/main/ddl'
 import { SETTINGS_DDL } from '@modules/settings/main/ddl'
+import { SCHEDULE_DDL } from '@modules/schedule/main/ddl'
+import { seedExampleScheduledTasks } from '@modules/schedule/main/seed'
 import { SKILL_DDL } from '@modules/skill/main/ddl'
 
 /* 各领域建表片段按依赖顺序拼接 */
-const DDL = [PROVIDER_DDL, PROJECT_DDL, CHAT_DDL, SETTINGS_DDL, MCP_DDL, SKILL_DDL, AGENT_DDL, DIAGNOSTICS_DDL, APP_CENTER_DDL].join('\n')
+const DDL = [PROVIDER_DDL, PROJECT_DDL, CHAT_DDL, SETTINGS_DDL, MCP_DDL, SKILL_DDL, AGENT_DDL, DIAGNOSTICS_DDL, APP_CENTER_DDL, SCHEDULE_DDL].join('\n')
 
-/* 初始化本地数据库（应用就绪后调用） */
-export function initDatabaseFromModules(): void {
-  initDatabase(DDL, [seedMcpServers, seedDefaultAgent])
+/* 初始化本地数据库（应用就绪后调用）：返回旧库备份重建结果 */
+export function initDatabaseFromModules(): DatabaseInitResult {
+  return initDatabase(DDL, [seedMcpServers, seedDefaultAgent, ensureDefaultProject, seedExampleScheduledTasks])
 }

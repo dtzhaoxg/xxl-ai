@@ -6,9 +6,17 @@
 import { computed, ref, watch } from 'vue'
 import { useToolPanelStore, type ToolPanelTab } from '@modules/toolPanel/renderer'
 import { useSettingsStore } from '@modules/settings/renderer'
-import { t } from '@renderer/shell/i18n'
+import { t } from '@common/renderer/i18n'
+import { DeskTooltip } from '@common/renderer/components'
 import { FilePanel } from '@modules/file/renderer'
-import { GitIcon, GlobeIcon, TerminalIcon } from '@common/renderer/components/icons'
+import {
+  GitIcon,
+  GlobeIcon,
+  PanelCollapseIcon,
+  PanelMaximizeIcon,
+  PanelRestoreIcon,
+  TerminalIcon
+} from '@common/renderer/components/icons'
 import { BrowserPanel } from '@modules/browser/renderer'
 import { GitPanel } from '@modules/git/renderer'
 import { TerminalPanel } from '@modules/terminal/renderer'
@@ -125,17 +133,22 @@ function toggleFocus(): void {
         </button>
       </div>
       <div class="tool-actions">
-        <button
-          class="icon-button"
-          :title="panel.mode === 'focus' ? t('panel.restore') : t('panel.maximize')"
-          @click="toggleFocus"
-        >
-          <el-icon v-if="panel.mode === 'focus'"><Minus /></el-icon>
-          <el-icon v-else><FullScreen /></el-icon>
-        </button>
-        <button class="icon-button" :title="t('panel.close')" @click="closePanel">
-          <el-icon><Close /></el-icon>
-        </button>
+        <DeskTooltip :content="panel.mode === 'focus' ? t('panel.restore') : t('panel.maximize')">
+          <button
+            class="icon-button"
+            :class="{ active: panel.mode === 'focus' }"
+            :aria-label="panel.mode === 'focus' ? t('panel.restore') : t('panel.maximize')"
+            @click="toggleFocus"
+          >
+            <PanelRestoreIcon v-if="panel.mode === 'focus'" class="tool-action-icon" />
+            <PanelMaximizeIcon v-else class="tool-action-icon" />
+          </button>
+        </DeskTooltip>
+        <DeskTooltip :content="t('panel.close')">
+          <button class="icon-button" :aria-label="t('panel.close')" @click="closePanel">
+            <PanelCollapseIcon class="tool-action-icon" />
+          </button>
+        </DeskTooltip>
       </div>
     </div>
 
@@ -148,7 +161,12 @@ function toggleFocus(): void {
         :root="props.root"
         :project-name="props.projectName"
       />
-      <BrowserPanel v-if="opened.browser" v-show="activeTab === 'browser'" :session-id="props.sessionId" />
+      <BrowserPanel
+        v-if="opened.browser"
+        v-show="activeTab === 'browser'"
+        :session-id="props.sessionId"
+        :active="panel.visible && activeTab === 'browser'"
+      />
       <DiagnosticsPanel
         v-if="opened.diagnostics"
         v-show="activeTab === 'diagnostics'"
@@ -183,7 +201,7 @@ function toggleFocus(): void {
 }
 
 .tool-panel-header {
-  height: var(--desk-panel-header-height);
+  height: var(--desk-toolbar-height);
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -206,8 +224,8 @@ function toggleFocus(): void {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 26px;
-  padding: 0 10px;
+  height: 24px;
+  padding: 0 9px;
   border: none;
   border-radius: 7px;
   background: transparent;
@@ -232,8 +250,8 @@ function toggleFocus(): void {
 }
 
 .tool-tab-icon {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
 }
 
 .tool-actions {
@@ -241,6 +259,25 @@ function toggleFocus(): void {
   align-items: center;
   gap: 2px;
   flex-shrink: 0;
+}
+
+/* 头部操作按钮跟随工具条高度收敛，避免 30px 的通用图标按钮撑满 32px 行 */
+.tool-actions .icon-button {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+}
+
+/* 聚焦模式下保持按钮高亮，提示当前面板已放大 */
+.tool-actions .icon-button.active {
+  background: var(--desk-primary-soft);
+  color: var(--desk-primary);
+}
+
+/* 自绘面板图标：与 icon-button 字号同尺寸 */
+.tool-action-icon {
+  width: var(--desk-icon-md);
+  height: var(--desk-icon-md);
 }
 
 .tool-panel-body {

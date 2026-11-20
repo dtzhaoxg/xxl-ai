@@ -5,7 +5,7 @@
  */
 import { computed } from 'vue'
 import { useSettingsStore } from '@modules/settings/renderer'
-import { t } from '@renderer/shell/i18n'
+import { t } from '@common/renderer/i18n'
 import ShortcutSettings from '@modules/settings/renderer/components/ShortcutSettings.vue'
 import { THEME_PRESETS } from '@modules/settings/shared'
 import type { AppSettings } from '@modules/settings/shared'
@@ -87,10 +87,6 @@ const language = computed<AppSettings['language']>({
 </template>
 
 <style scoped lang="scss">
-.settings-form {
-  max-width: 640px;
-}
-
 /* Element Plus 表单内容为 flex 容器，需显式撑满，否则内部网格按内容宽度收缩 */
 .settings-form :deep(.el-form-item__content) {
   width: 100%;
@@ -104,7 +100,7 @@ const language = computed<AppSettings['language']>({
   width: 100%;
 }
 
-/* 主题卡片：色板预览 + 名称，10 套主题自适应多列 */
+/* 主题卡片：色板预览 + 名称，14 套主题自适应多列 */
 .theme-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));

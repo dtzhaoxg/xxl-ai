@@ -52,6 +52,7 @@ export interface EditorThemePalette {
   activeLine: string
   activeGutter: string
   selection: string
+  selectionMatch: string
   searchMatch: string
   searchMatchActive: string
   keyword: string
@@ -74,11 +75,12 @@ const AUTO_PALETTE: EditorThemePalette = {
   background: 'var(--desk-surface-content)',
   text: 'var(--desk-code-text)',
   gutterBg: 'var(--desk-surface-panel)',
-  gutterText: 'var(--desk-text-tertiary)',
+  gutterText: 'var(--theme-text-tertiary)',
   border: 'var(--desk-border-soft)',
   activeLine: 'color-mix(in srgb, var(--desk-primary) 6%, transparent)',
   activeGutter: 'color-mix(in srgb, var(--desk-primary) 8%, transparent)',
   selection: 'var(--desk-selection)',
+  selectionMatch: 'var(--desk-selection-match)',
   searchMatch: 'color-mix(in srgb, var(--desk-warning) 26%, transparent)',
   searchMatchActive: 'color-mix(in srgb, var(--desk-warning) 62%, transparent)',
   keyword: 'var(--code-red)',
@@ -96,7 +98,11 @@ const AUTO_PALETTE: EditorThemePalette = {
   invalid: 'var(--code-red)'
 }
 
-/* 固定主题：只用于编辑器，不影响应用外壳 */
+/*
+ * 固定主题：只用于编辑器，不影响应用外壳。
+ * 注意：CodeMirror 的选区画在 .cm-selectionLayer（z-index: -1，位于正文背景之下），
+ * 当前行高亮必须使用半透明色，否则不透明底色会把同一行的选区整块盖住（双击选词时最明显）。
+ */
 const PALETTES: Record<Exclude<EditorThemeId, 'auto'>, EditorThemePalette> = {
   'github-light': {
     background: '#ffffff',
@@ -104,9 +110,10 @@ const PALETTES: Record<Exclude<EditorThemeId, 'auto'>, EditorThemePalette> = {
     gutterBg: '#f6f8fa',
     gutterText: '#6e7781',
     border: '#d0d7de',
-    activeLine: '#f3f5f8',
+    activeLine: 'rgba(31, 35, 40, 0.045)',
     activeGutter: '#eaeef2',
-    selection: '#b6d7ff',
+    selection: '#7caff7',
+    selectionMatch: 'rgba(9, 105, 218, 0.14)',
     searchMatch: 'rgba(255, 213, 0, 0.35)',
     searchMatchActive: 'rgba(255, 176, 0, 0.65)',
     keyword: '#cf222e',
@@ -129,9 +136,10 @@ const PALETTES: Record<Exclude<EditorThemeId, 'auto'>, EditorThemePalette> = {
     gutterBg: '#21252b',
     gutterText: '#5c6370',
     border: '#3a3f4b',
-    activeLine: '#2c313a',
+    activeLine: 'rgba(255, 255, 255, 0.025)',
     activeGutter: '#323842',
-    selection: '#3e4451',
+    selection: '#4173ad',
+    selectionMatch: 'rgba(97, 175, 239, 0.16)',
     searchMatch: 'rgba(229, 192, 123, 0.35)',
     searchMatchActive: 'rgba(229, 192, 123, 0.7)',
     keyword: '#c678dd',
@@ -154,9 +162,10 @@ const PALETTES: Record<Exclude<EditorThemeId, 'auto'>, EditorThemePalette> = {
     gutterBg: '#2b303b',
     gutterText: '#616e88',
     border: '#3b4252',
-    activeLine: '#3b4252',
+    activeLine: 'rgba(136, 192, 208, 0.11)',
     activeGutter: '#434c5e',
-    selection: '#434c5e',
+    selection: '#4f78ad',
+    selectionMatch: 'rgba(136, 192, 208, 0.16)',
     searchMatch: 'rgba(235, 203, 139, 0.35)',
     searchMatchActive: 'rgba(235, 203, 139, 0.7)',
     keyword: '#81a1c1',
@@ -179,9 +188,10 @@ const PALETTES: Record<Exclude<EditorThemeId, 'auto'>, EditorThemePalette> = {
     gutterBg: '#21222c',
     gutterText: '#6272a4',
     border: '#44475a',
-    activeLine: '#44475a',
+    activeLine: 'rgba(189, 147, 249, 0.10)',
     activeGutter: '#4d5066',
-    selection: '#44475a',
+    selection: '#4173ad',
+    selectionMatch: 'rgba(189, 147, 249, 0.16)',
     searchMatch: 'rgba(241, 250, 140, 0.3)',
     searchMatchActive: 'rgba(241, 250, 140, 0.65)',
     keyword: '#ff79c6',
@@ -204,9 +214,10 @@ const PALETTES: Record<Exclude<EditorThemeId, 'auto'>, EditorThemePalette> = {
     gutterBg: '#eee8d5',
     gutterText: '#93a1a1',
     border: '#eee8d5',
-    activeLine: '#eee8d5',
+    activeLine: 'rgba(0, 0, 0, 0.06)',
     activeGutter: '#e6dfc9',
-    selection: '#d5e1e6',
+    selection: '#7fb2f7',
+    selectionMatch: 'rgba(38, 139, 210, 0.14)',
     searchMatch: 'rgba(181, 137, 0, 0.3)',
     searchMatchActive: 'rgba(181, 137, 0, 0.6)',
     keyword: '#859900',
@@ -229,9 +240,10 @@ const PALETTES: Record<Exclude<EditorThemeId, 'auto'>, EditorThemePalette> = {
     gutterBg: '#f0f0f0',
     gutterText: '#9d9d9f',
     border: '#e5e5e6',
-    activeLine: '#f0f0f0',
+    activeLine: 'rgba(0, 0, 0, 0.04)',
     activeGutter: '#e8e8e8',
-    selection: '#d0d8f0',
+    selection: '#7caff7',
+    selectionMatch: 'rgba(64, 120, 242, 0.14)',
     searchMatch: 'rgba(230, 180, 0, 0.3)',
     searchMatchActive: 'rgba(230, 180, 0, 0.6)',
     keyword: '#a626a4',
@@ -254,9 +266,10 @@ const PALETTES: Record<Exclude<EditorThemeId, 'auto'>, EditorThemePalette> = {
     gutterBg: '#073642',
     gutterText: '#586e75',
     border: '#073642',
-    activeLine: '#073642',
+    activeLine: 'rgba(126, 200, 214, 0.055)',
     activeGutter: '#0b3d4a',
-    selection: '#0e4b5a',
+    selection: '#1f6a95',
+    selectionMatch: 'rgba(38, 139, 210, 0.18)',
     searchMatch: 'rgba(181, 137, 0, 0.3)',
     searchMatchActive: 'rgba(181, 137, 0, 0.6)',
     keyword: '#859900',
@@ -279,9 +292,10 @@ const PALETTES: Record<Exclude<EditorThemeId, 'auto'>, EditorThemePalette> = {
     gutterBg: '#1c2128',
     gutterText: '#768390',
     border: '#444c56',
-    activeLine: '#2d333b',
+    activeLine: 'rgba(255, 255, 255, 0.055)',
     activeGutter: '#373e47',
-    selection: '#3b5070',
+    selection: '#4173ad',
+    selectionMatch: 'rgba(83, 155, 245, 0.18)',
     searchMatch: 'rgba(210, 153, 34, 0.3)',
     searchMatchActive: 'rgba(210, 153, 34, 0.65)',
     keyword: '#f47067',
@@ -306,6 +320,57 @@ export function editorPalette(id: string | undefined): EditorThemePalette {
     return AUTO_PALETTE
   }
   return PALETTES[id as Exclude<EditorThemeId, 'auto'>] ?? AUTO_PALETTE
+}
+
+/*
+ * 编辑器内容区配色变量：编辑器、Markdown 预览与右侧目录共用同一套主题，
+ * 不读取应用皮肤的语义色。仅在对应容器上覆盖 --desk-* / --code-*，不影响其它区域。
+ */
+export function editorThemeVars(id: string | undefined): Record<string, string> {
+  const palette = editorPalette(id)
+  /*
+   * auto：预览容器沿用应用皮肤自身的语义变量即可。
+   * 不能把 AUTO_PALETTE 的 var(...) 引用原样覆盖回去（如 --desk-code-text: var(--desk-code-text)），
+   * 否则会形成自引用循环，导致预览内的文字、边框、滚动条等变量全部失效。
+   */
+  if (!id || id === 'auto') {
+    return {}
+  }
+  /* 在编辑器底色上叠一层文字色，得到与主题同色相的浅底 */
+  const tint = (color: string, percent: number): string =>
+    `color-mix(in srgb, ${color} ${percent}%, ${palette.background})`
+  return {
+    /* 表面与文本 */
+    '--desk-bg': palette.background,
+    '--desk-bg-elevated': tint(palette.text, 5),
+    '--desk-panel-bg': tint(palette.text, 4),
+    '--desk-text': palette.text,
+    '--desk-text-secondary': palette.comment,
+    '--desk-text-tertiary': palette.gutterText,
+    '--desk-border': palette.border,
+    '--desk-border-strong': tint(palette.text, 16),
+    /* 滚动条：在主题容器内单独给色，避免沿用应用外壳的浅描边导致滑块不可见 */
+    '--desk-scrollbar-thumb': tint(palette.text, 22),
+    '--desk-scrollbar-thumb-hover': tint(palette.text, 40),
+    /* 强调色：链接 / 引用 / 表格等统一取编辑器主题的链接色 */
+    '--desk-primary': palette.link,
+    '--desk-primary-soft': tint(palette.link, 10),
+    /* 代码块与行内代码 */
+    '--desk-code-bg': tint(palette.text, 6),
+    '--desk-code-text': palette.text,
+    '--desk-code-border': palette.border,
+    '--desk-code-inline-bg': `color-mix(in srgb, ${palette.text} 8%, transparent)`,
+    /* highlight.js 语法色与编辑器语法高亮同源 */
+    '--code-red': palette.keyword,
+    '--code-purple': palette.function,
+    '--code-blue': palette.property,
+    '--code-string': palette.string,
+    '--code-orange': palette.type,
+    '--code-comment': palette.comment,
+    '--code-green': palette.tag,
+    '--code-yellow': palette.number,
+    '--code-subst': palette.text
+  }
 }
 
 /* 是否为合法主题标识（持久化读取时校验） */

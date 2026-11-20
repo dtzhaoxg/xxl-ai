@@ -38,6 +38,7 @@ export type HostEvent =
   | { type: 'tool_start'; toolCallId: string; toolName: string; args: unknown } /* 工具开始 */
   | { type: 'tool_end'; toolCallId: string; toolName: string; isError: boolean; result?: string; details?: unknown; durationMs?: number } /* 工具结束 */
   | { type: 'usage'; used: number; window: number; systemTokens?: number; toolTokens?: number; messageTokens?: number } /* 上下文用量（每次模型响应结束后回传；分项为估算值） */
+  | { type: 'checkpoint'; messages: unknown[] } /* 本轮已完成消息快照（每条消息结束时回传，供主进程增量落库） */
   | { type: 'notice'; message: string } /* 非致命异常提示（继续执行） */
   | { type: 'done' } /* 本轮完成 */
   | { type: 'error'; message: string } /* 出错（结束） */
@@ -144,7 +145,6 @@ export type WorkerRequest =
 /* 运行时进程 → 主进程 */
 export type WorkerMessage =
   | { type: 'event'; sessionId: number; event: HostEvent } /* 流式事件 */
-  | { type: 'open-browser'; sessionId: number; url: string; newTab?: boolean } /* 在右侧「浏览器」面板打开页面（Agent 工具触发） */
   | { type: 'browser-action'; requestId: string; sessionId: number; action: BrowserAction } /* 执行页面动作（跨进程请求渲染层） */
   | { type: 'run-done'; sessionId: number; messages: unknown[] } /* 运行完成（只返回本轮新增消息） */
   | { type: 'run-error'; sessionId: number; message: string } /* 运行失败 */

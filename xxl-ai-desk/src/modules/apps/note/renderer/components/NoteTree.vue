@@ -1,20 +1,27 @@
 <script setup lang="ts">
 /*
- * 笔记目录：根目录展开、按名称过滤、右键新建 / 重命名 / 删除 / 定位，宽度可拖拽。
+ * 笔记目录：根目录不展示（直接列出其子项）、按名称过滤、右键新建 / 重命名 / 删除 / 定位、拖拽移动，宽度可拖拽。
  * @author xuxueli 2026-11-08
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { api } from '@common/renderer/api'
-import { t } from '@renderer/shell/i18n'
+import { CollapseShell, DeskTooltip } from '@common/renderer/components'
+import { CollapseAllIcon, ExpandAllIcon } from '@common/renderer/components/icons'
+import { useCollapseAnimation } from '@common/renderer/composables/useCollapseAnimation'
+import { ipcErrorMessage } from '@common/renderer/utils/ipcError'
+import { t } from '@common/renderer/i18n'
 import PanelResizer from '@renderer/shell/layout/components/PanelResizer/index.vue'
 import NoteTreeNode from '@modules/apps/note/renderer/components/NoteTreeNode.vue'
 import NoteNameDialog from '@modules/apps/note/renderer/components/NoteNameDialog.vue'
 import { useNoteStore } from '@modules/apps/note/renderer/store'
+import { useNoteTreeDrag } from '@modules/apps/note/renderer/composables/useNoteTreeDrag'
 import { parentDir } from '@modules/apps/note/renderer/utils/path'
+import { matchesNoteEntry } from '@modules/apps/note/renderer/utils/tree'
 import type { NoteEntry } from '@modules/apps/note/shared'
 
 const store = useNoteStore()
+const { dragging, dropTargetPath, endDrag, canDropInto } = useNoteTreeDrag()
 
 /* 树宽度：拖拽像素值，按最小宽度夹取 */
 const treeWidth = computed({
@@ -22,16 +29,56 @@ const treeWidth = computed({
   set: (value: number) => store.setTreeWidth(value)
 })
 
-/* 根节点：以笔记目录名展示，点击箭头展开 / 收起整棵树 */
-const rootEntry = computed<NoteEntry | null>(() => {
-  if (!store.rootPath) {
-    return null
-  }
-  return { name: store.rootName, path: store.rootPath, relativePath: '', isDir: true }
+/* 目录折叠过渡：仅在折叠状态变化时播放 */
+const { animated, onTransitionEnd } = useCollapseAnimation(() => store.treeCollapsed)
+
+/* 根目录子项：根目录本身不展示，直接以顶层节点呈现 */
+const rootChildren = computed(() => store.childrenMap[store.rootPath] ?? [])
+
+/* 过滤后的根目录可见子项 */
+const visibleRootChildren = computed(() => {
+  const word = store.keyword.trim()
+  return word
+    ? rootChildren.value.filter((entry) => matchesNoteEntry(entry, word, store.childrenMap))
+    : rootChildren.value
 })
 
-/* 根目录子项 */
-const rootChildren = computed(() => store.childrenMap[store.rootPath] ?? [])
+/* 拖拽到空白区：移动到笔记根目录 */
+function onRootDragOver(event: DragEvent): void {
+  if (!canDropInto(store.rootPath)) {
+    return
+  }
+  event.preventDefault()
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move'
+  }
+  dropTargetPath.value = store.rootPath
+}
+
+/* 离开空白区：移入子元素时保留高亮 */
+function onRootDragLeave(event: DragEvent): void {
+  const current = event.currentTarget
+  const next = event.relatedTarget
+  if (current instanceof Node && next instanceof Node && current.contains(next)) {
+    return
+  }
+  if (dropTargetPath.value === store.rootPath) {
+    dropTargetPath.value = ''
+  }
+}
+
+/* 在空白区投放：把被拖节点移动到根目录 */
+async function onRootDrop(event: DragEvent): Promise<void> {
+  event.preventDefault()
+  const source = dragging.value
+  const target = store.rootPath
+  if (!source || !canDropInto(target)) {
+    endDrag()
+    return
+  }
+  endDrag()
+  await store.moveEntry(source, target)
+}
 
 /* 右键菜单状态 */
 const contextMenu = ref<{ entry: NoteEntry; x: number; y: number; visible: boolean } | null>(
@@ -42,8 +89,8 @@ const contextMenu = ref<{ entry: NoteEntry; x: number; y: number; visible: boole
 const menuRef = ref<HTMLElement | null>(null)
 const menuPosition = ref({ left: 0, top: 0 })
 
-/* 右键菜单动作 */
-type NoteMenuAction = 'newNote' | 'newFolder' | 'rename' | 'trash' | 'reveal'
+/* 右键菜单动作：目录含新建入口，文件仅重命名 / 复制 / 删除 */
+type NoteMenuAction = 'newNote' | 'newFolder' | 'rename' | 'copy' | 'trash'
 
 /* 右键菜单项 */
 interface NoteMenuItem {
@@ -52,24 +99,25 @@ interface NoteMenuItem {
   icon: string
 }
 
-/* 菜单项：根目录不提供重命名 / 删除 */
+/* 菜单项按目录 / 文件区分 */
 const menuItems = computed<NoteMenuItem[]>(() => {
   const entry = contextMenu.value?.entry
   if (!entry) {
     return []
   }
-  const items: NoteMenuItem[] = [
-    { action: 'newNote', labelKey: 'note.newNote', icon: 'DocumentAdd' },
-    { action: 'newFolder', labelKey: 'note.newFolder', icon: 'FolderAdd' }
-  ]
-  if (entry.path !== store.rootPath) {
-    items.push(
+  if (entry.isDir) {
+    return [
+      { action: 'newNote', labelKey: 'note.newNote', icon: 'DocumentAdd' },
+      { action: 'newFolder', labelKey: 'note.newFolder', icon: 'FolderAdd' },
       { action: 'rename', labelKey: 'note.rename', icon: 'EditPen' },
       { action: 'trash', labelKey: 'note.delete', icon: 'Delete' }
-    )
+    ]
   }
-  items.push({ action: 'reveal', labelKey: 'note.reveal', icon: 'FolderOpened' })
-  return items
+  return [
+    { action: 'rename', labelKey: 'note.rename', icon: 'EditPen' },
+    { action: 'copy', labelKey: 'note.copy', icon: 'CopyDocument' },
+    { action: 'trash', labelKey: 'note.delete', icon: 'Delete' }
+  ]
 })
 
 /* 右键打开菜单：先贴近鼠标，再按菜单实际尺寸向内收拢 */
@@ -101,26 +149,63 @@ function targetDirOf(entry: NoteEntry): string {
 /* 名称弹框目标：新建笔记 / 新建目录 / 重命名 */
 type NoteNameTarget = 'newNote' | 'newFolder' | 'rename'
 
-/* 名称弹框状态 */
+/* 名称弹框状态：新建时携带初始目录，重命名不展示位置选择 */
 const nameDialogVisible = ref(false)
+const nameDialogError = ref('')
 const nameDialogState = ref<{
   target: NoteNameTarget
   title: string
+  placeholder: string
+  requiredMessage: string
   initialValue: string
-  dir: string
+  directory?: string
   entry: NoteEntry | null
 } | null>(null)
 
-/* 打开名称弹框：按目标回填标题与初始名称 */
+/* 弹框初始名称：新建笔记用默认标题、新建目录留空；重命名笔记隐藏 .md 扩展名 */
+function initialNameOf(
+  target: NoteNameTarget,
+  entry: NoteEntry | null,
+  isFolder: boolean
+): string {
+  if (target === 'newNote') {
+    return t('note.untitled')
+  }
+  if (target === 'newFolder') {
+    return ''
+  }
+  const name = entry?.name ?? ''
+  return isFolder ? name : name.replace(/\.md$/i, '')
+}
+
+/* 打开名称弹框：按笔记 / 目录与新建 / 重命名回填标题、提示与初始名称 */
 function openNameDialog(target: NoteNameTarget, dir: string, entry: NoteEntry | null): void {
+  const isFolder = target === 'newFolder' || (target === 'rename' && Boolean(entry?.isDir))
   const titles: Record<NoteNameTarget, string> = {
     newNote: t('note.newNote'),
     newFolder: t('note.newFolder'),
-    rename: t('note.rename')
+    rename: isFolder ? t('note.renameFolder') : t('note.renameNote')
   }
-  const initialValue =
-    target === 'newNote' ? t('note.untitled') : target === 'rename' ? (entry?.name ?? '') : ''
-  nameDialogState.value = { target, title: titles[target], initialValue, dir, entry }
+  const placeholders: Record<NoteNameTarget, string> = {
+    newNote: t('note.noteNamePlaceholder'),
+    newFolder: t('note.folderNamePlaceholder'),
+    rename: t('note.renameNamePlaceholder')
+  }
+  const requiredMessages: Record<NoteNameTarget, string> = {
+    newNote: t('note.noteNameRequired'),
+    newFolder: t('note.folderNameRequired'),
+    rename: t('note.renameNameRequired')
+  }
+  nameDialogState.value = {
+    target,
+    title: titles[target],
+    placeholder: placeholders[target],
+    requiredMessage: requiredMessages[target],
+    initialValue: initialNameOf(target, entry, isFolder),
+    directory: target === 'rename' ? undefined : dir,
+    entry
+  }
+  nameDialogError.value = ''
   nameDialogVisible.value = true
 }
 
@@ -139,26 +224,32 @@ function rename(entry: NoteEntry): void {
   openNameDialog('rename', '', entry)
 }
 
-/* 提交名称：按目标执行对应操作 */
-async function onNameSubmit(name: string): Promise<void> {
+/* 提交名称：成功关闭弹框，失败在弹框内就地提示 */
+async function onNameSubmit(name: string, directory: string): Promise<void> {
   const state = nameDialogState.value
   if (!state) {
     return
   }
-  switch (state.target) {
-    case 'newNote':
-      await store.createNote(state.dir, name)
-      break
-    case 'newFolder':
-      await store.createFolder(state.dir, name)
-      break
-    case 'rename':
-      if (state.entry) {
-        await store.renameEntry(state.entry, name)
-      }
-      break
-    default:
-      break
+  nameDialogError.value = ''
+  try {
+    switch (state.target) {
+      case 'newNote':
+        await store.createNote(directory, name)
+        break
+      case 'newFolder':
+        await store.createFolder(directory, name)
+        break
+      case 'rename':
+        if (state.entry) {
+          await store.renameEntry(state.entry, name)
+        }
+        break
+      default:
+        break
+    }
+    nameDialogVisible.value = false
+  } catch (submitError) {
+    nameDialogError.value = ipcErrorMessage(submitError)
   }
 }
 
@@ -167,9 +258,9 @@ async function trash(entry: NoteEntry): Promise<void> {
   try {
     await ElMessageBox.confirm(
       t('note.deleteConfirm', [entry.name]),
-      t('note.delete'),
+      entry.isDir ? t('note.deleteFolder') : t('note.deleteNote'),
       {
-        confirmButtonText: t('common.confirm'),
+        confirmButtonText: t('common.delete'),
         cancelButtonText: t('common.cancel'),
         type: 'warning'
       }
@@ -185,16 +276,16 @@ async function revealPath(path: string): Promise<void> {
   try {
     await api.shell.reveal(path)
   } catch (revealError) {
-    ElMessage.error(String(revealError))
+    ElMessage.error(ipcErrorMessage(revealError))
   }
 }
 
-/* 右键菜单：在系统中定位 */
-function reveal(entry: NoteEntry): void {
-  void revealPath(entry.path)
+/* 目录快捷“+”：在当前目录下新建笔记 */
+function createNoteIn(entry: NoteEntry): void {
+  createNote(entry.path)
 }
 
-/* 执行菜单动作 */
+/* 执行菜单动作：右键与悬浮“...”共用同一套逻辑 */
 async function onMenuAction(action: NoteMenuAction): Promise<void> {
   const entry = contextMenu.value?.entry
   closeMenu()
@@ -211,11 +302,11 @@ async function onMenuAction(action: NoteMenuAction): Promise<void> {
     case 'rename':
       rename(entry)
       break
+    case 'copy':
+      await store.copyEntry(entry)
+      break
     case 'trash':
       await trash(entry)
-      break
-    case 'reveal':
-      reveal(entry)
       break
     default:
       break
@@ -257,98 +348,145 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="note-tree" :style="{ width: `${treeWidth}px` }">
-    <!-- 右边缘拖拽手柄：拖拽调整目录宽度，双击恢复默认 -->
+  <CollapseShell
+    class="note-tree"
+    :width="treeWidth"
+    :collapsed="store.treeCollapsed"
+    :animated="animated"
+    @transitionend="onTransitionEnd"
+  >
+    <!-- 右边缘拖拽手柄：拖拽调整目录宽度，双击恢复默认；折叠时随外壳宽度隐藏 -->
     <PanelResizer
+      v-if="!store.treeCollapsed"
       v-model:size="treeWidth"
       side="left"
       :title="t('layout.resetPanelWidth')"
       @reset="store.resetTreeWidth"
     />
-    <div class="note-tree-head">
-      <span class="note-tree-title">{{ t('note.title') }}</span>
-      <button class="note-icon-btn" :title="t('note.newNote')" @click="createNote(store.rootPath)">
-        <el-icon><DocumentAdd /></el-icon>
-      </button>
-      <button class="note-icon-btn" :title="t('note.newFolder')" @click="createFolder(store.rootPath)">
-        <el-icon><FolderAdd /></el-icon>
-      </button>
-      <button class="note-icon-btn" :title="t('note.openDir')" @click="revealPath(store.rootPath)">
-        <el-icon><FolderOpened /></el-icon>
-      </button>
-    </div>
-    <div class="note-tree-filter">
-      <el-input
-        v-model="store.keyword"
-        size="small"
-        clearable
-        :placeholder="t('note.searchPlaceholder')"
-      >
-        <template #prefix>
-          <el-icon><Search /></el-icon>
-        </template>
-      </el-input>
-    </div>
-    <el-scrollbar class="note-tree-body">
-      <template v-if="rootEntry">
-        <NoteTreeNode
-          :entry="rootEntry"
-          :depth="0"
-          @context-menu="openMenu"
-        />
-        <div
-          v-if="!store.loading && store.keyword.trim() === '' && rootChildren.length === 0"
-          class="note-tree-empty"
-        >
-          <div class="empty-title">{{ t('note.emptyTree') }}</div>
-          <div class="empty-tip">{{ t('note.emptyTreeTip') }}</div>
-        </div>
-      </template>
-      <div v-else class="note-tree-empty">
-        <div class="empty-tip">{{ t('common.empty') }}</div>
-      </div>
-    </el-scrollbar>
-
-    <!-- 右键菜单：样式与文件树右键菜单保持一致 -->
-    <Teleport to="body">
-      <div
-        v-if="contextMenu?.visible"
-        ref="menuRef"
-        class="note-menu"
-        :style="{ left: `${menuPosition.left}px`, top: `${menuPosition.top}px` }"
-        @contextmenu.prevent
-      >
-        <template v-for="(item, index) in menuItems" :key="item.action">
-          <div v-if="index > 0 && item.action === 'reveal'" class="note-menu-sep"></div>
-          <button
-            class="note-menu-item"
-            :class="{ danger: item.action === 'trash' }"
-            @click="onMenuAction(item.action)"
-          >
-            <el-icon><component :is="item.icon" /></el-icon>
-            <span>{{ t(item.labelKey) }}</span>
+    <div class="note-tree-inner">
+      <div class="note-tree-head">
+        <span class="note-tree-title">{{ t('note.title') }}</span>
+        <!-- 顺序：新建笔记 → 新建目录 → 展开/折叠全部 → 打开目录 -->
+        <DeskTooltip :content="t('note.newNote')">
+          <button class="note-icon-btn" @click="createNote(store.rootPath)">
+            <el-icon><DocumentAdd /></el-icon>
           </button>
-        </template>
+        </DeskTooltip>
+        <DeskTooltip :content="t('note.newFolder')">
+          <button class="note-icon-btn" @click="createFolder(store.rootPath)">
+            <el-icon><FolderAdd /></el-icon>
+          </button>
+        </DeskTooltip>
+        <DeskTooltip
+          :content="store.allDirsExpanded ? t('note.collapseAll') : t('note.expandAll')"
+        >
+          <button
+            class="note-icon-btn"
+            :disabled="!store.rootPath"
+            @click="store.toggleAllDirs"
+          >
+            <CollapseAllIcon v-if="store.allDirsExpanded" class="note-toggle-icon" />
+            <ExpandAllIcon v-else class="note-toggle-icon" />
+          </button>
+        </DeskTooltip>
+        <DeskTooltip :content="t('note.openDir')">
+          <button class="note-icon-btn" @click="revealPath(store.rootPath)">
+            <el-icon><FolderOpened /></el-icon>
+          </button>
+        </DeskTooltip>
       </div>
-    </Teleport>
+      <div class="note-tree-filter">
+        <el-input
+          v-model="store.keyword"
+          size="small"
+          clearable
+          :placeholder="t('note.searchPlaceholder')"
+        >
+          <template #prefix>
+            <el-icon><Search /></el-icon>
+          </template>
+        </el-input>
+      </div>
+      <el-scrollbar
+        class="note-tree-body"
+        :class="{ 'drop-root': store.rootPath !== '' && dropTargetPath === store.rootPath }"
+        @dragover="onRootDragOver"
+        @dragleave="onRootDragLeave"
+        @drop="onRootDrop"
+      >
+        <template v-if="store.rootPath">
+          <NoteTreeNode
+            v-for="entry in visibleRootChildren"
+            :key="entry.path"
+            :entry="entry"
+            :depth="0"
+            @context-menu="openMenu"
+            @create-note="createNoteIn"
+          />
+          <div
+            v-if="!store.loading && store.keyword.trim() === '' && rootChildren.length === 0"
+            class="note-tree-empty"
+          >
+            <div class="empty-title">{{ t('note.emptyTree') }}</div>
+            <div class="empty-tip">{{ t('note.emptyTreeTip') }}</div>
+          </div>
+        </template>
+        <div v-else class="note-tree-empty">
+          <div class="empty-tip">{{ t('common.empty') }}</div>
+        </div>
+      </el-scrollbar>
+    </div>
+  </CollapseShell>
 
-    <!-- 名称弹框：新建笔记 / 新建目录 / 重命名共用 -->
-    <NoteNameDialog
-      v-model="nameDialogVisible"
-      :title="nameDialogState?.title ?? ''"
-      :initial-value="nameDialogState?.initialValue ?? ''"
-      :placeholder="t('note.namePlaceholder')"
-      @submit="onNameSubmit"
-    />
-  </div>
+  <!-- 右键菜单：样式与文件树右键菜单保持一致 -->
+  <Teleport to="body">
+    <div
+      v-if="contextMenu?.visible"
+      ref="menuRef"
+      class="note-menu"
+      :style="{ left: `${menuPosition.left}px`, top: `${menuPosition.top}px` }"
+      @contextmenu.prevent
+    >
+      <template v-for="(item, index) in menuItems" :key="item.action">
+        <div v-if="index > 0 && item.action === 'trash'" class="note-menu-sep"></div>
+        <button
+          class="note-menu-item"
+          :class="{ danger: item.action === 'trash' }"
+          @click="onMenuAction(item.action)"
+        >
+          <el-icon><component :is="item.icon" /></el-icon>
+          <span>{{ t(item.labelKey) }}</span>
+        </button>
+      </template>
+    </div>
+  </Teleport>
+
+  <!-- 名称弹框：新建笔记 / 新建目录 / 重命名共用 -->
+  <NoteNameDialog
+    v-model="nameDialogVisible"
+    :title="nameDialogState?.title ?? ''"
+    :initial-value="nameDialogState?.initialValue ?? ''"
+    :root-path="store.rootPath"
+    :directory="nameDialogState?.directory"
+    :placeholder="nameDialogState?.placeholder ?? ''"
+    :required-message="nameDialogState?.requiredMessage ?? ''"
+    :error-message="nameDialogError"
+    @submit="onNameSubmit"
+    @clear-error="nameDialogError = ''"
+  />
 </template>
 
 <style scoped lang="scss">
+/* 笔记目录：外层折叠外壳负责宽度过渡，内容区宽度固定，折叠时整体左移淡出 */
 .note-tree {
   position: relative;
-  flex-shrink: 0;
-  min-width: 0;
   height: 100%;
+  min-width: 0;
+}
+
+.note-tree-inner {
+  height: 100%;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   background: var(--desk-surface-sidebar);
@@ -357,7 +495,7 @@ onBeforeUnmount(() => {
 
 .note-tree-head {
   flex-shrink: 0;
-  height: 44px;
+  height: 38px;
   padding: 0 8px 0 14px;
   display: flex;
   align-items: center;
@@ -377,6 +515,7 @@ onBeforeUnmount(() => {
 }
 
 .note-icon-btn {
+  flex-shrink: 0;
   width: 26px;
   height: 26px;
   padding: 0;
@@ -384,15 +523,28 @@ onBeforeUnmount(() => {
   border-radius: 7px;
   background: transparent;
   color: var(--desk-text-secondary);
+  /* 与项目名左侧图标同尺寸：button 默认不继承字号，需显式指定 */
+  font-size: var(--desk-font-md);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
 }
 
-.note-icon-btn:hover {
+.note-icon-btn:hover:not(:disabled) {
   background: var(--desk-primary-soft);
   color: var(--desk-text);
+}
+
+.note-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* 展开 / 折叠全部：与项目名左侧图标同一尺寸 */
+.note-toggle-icon {
+  width: var(--desk-font-md);
+  height: var(--desk-font-md);
 }
 
 .note-tree-filter {
@@ -404,6 +556,11 @@ onBeforeUnmount(() => {
   flex: 1;
   min-height: 0;
   padding: 0 6px 12px;
+}
+
+/* 拖拽到空白区：提示将移动到根目录 */
+.note-tree-body.drop-root {
+  background: var(--desk-primary-soft);
 }
 
 .note-tree-empty {

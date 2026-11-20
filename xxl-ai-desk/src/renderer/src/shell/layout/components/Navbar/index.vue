@@ -7,6 +7,7 @@ import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ChatCommandPalette, ChatSearchAction, useCommandPalette } from '@modules/chat/renderer'
 import { ToolPanelToggle } from '@modules/toolPanel/renderer'
+import ChatSidebarToggle from '@renderer/shell/layout/components/Navbar/ChatSidebarToggle.vue'
 import { useChatStore } from '@modules/chat/renderer'
 import { AgentAvatar, useAgentStore } from '@modules/agent/renderer'
 import { useSettingsStore } from '@modules/settings/renderer'
@@ -61,9 +62,6 @@ const boundAgent = computed(() => {
     agentStore.defaultAgent
   )
 })
-
-/* 软件名称：优先取用户自定义名称，未设置时回落应用默认名称 */
-const appName = computed(() => settings.settings.appName || t('app.name'))
 </script>
 
 <template>
@@ -74,7 +72,7 @@ const appName = computed(() => settings.settings.appName || t('app.name'))
         <el-icon><HomeFilled /></el-icon>
       </span>
       <!-- 软件名称：原导航按钮位置 -->
-      <div class="topbar-brand">{{ appName }}</div>
+      <div class="topbar-brand">{{ settings.displayAppName }}</div>
       <!-- 有标题时展示分隔线（｜），分隔软件名称与标题 -->
       <span v-if="hasTitle" class="topbar-sep" aria-hidden="true"></span>
       <div v-if="hasTitle" class="desk-topbar-context">
@@ -86,9 +84,10 @@ const appName = computed(() => settings.settings.appName || t('app.name'))
       </div>
     </div>
 
-    <!-- 对话页操作：搜索（chat）+ 终端 / 工具面板（toolPanel） -->
+    <!-- 对话页操作：搜索（chat）+ 会话列表开关 + 终端 / 工具面板（toolPanel） -->
     <div v-if="isChat" class="desk-topbar-actions">
       <ChatSearchAction />
+      <ChatSidebarToggle />
       <ToolPanelToggle />
     </div>
 
@@ -197,7 +196,7 @@ const appName = computed(() => settings.settings.appName || t('app.name'))
   margin-right: 10px;
   padding: 2px 8px 2px 4px;
   border-radius: 999px;
-  background: var(--desk-segment-bg);
+  background: var(--desk-chip-bg);
 }
 
 .topbar-agent-name {

@@ -4,8 +4,7 @@
  * @author xuxueli 2026-10-25
  */
 import { useSettingsStore } from '@modules/settings/renderer'
-import { t } from '@renderer/shell/i18n'
-import logo from '@resources/icon.png'
+import { t } from '@common/renderer/i18n'
 
 const settings = useSettingsStore()
 </script>
@@ -13,8 +12,8 @@ const settings = useSettingsStore()
 <template>
   <div class="about">
     <div class="about-brand">
-      <img class="about-logo" :src="logo" alt="logo" />
-      <div class="about-name">{{ t('app.name') }}</div>
+      <img class="about-logo" :src="settings.displayLogoUrl" alt="logo" />
+      <div class="about-name">{{ settings.displayAppName }}</div>
     </div>
     <div class="about-list">
       <div class="about-row">
@@ -53,12 +52,12 @@ const settings = useSettingsStore()
 </template>
 
 <style scoped lang="scss">
-/* 关于我们 */
+/* 关于我们：宽度由设置页外层容器控制（50% 居中） */
 .about {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  max-width: 640px;
+  width: 100%;
 }
 
 .about-brand {

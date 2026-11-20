@@ -3,5 +3,6 @@
  * @author xuxueli 2026-11-07
  */
 
-export { abortChat, discardSessionRuns } from './chatService'
-export { appendMessages, countSessionsByAgents, deleteSession, getSession, isSessionRemoved, listMessages, listNewProjectMessages, listSessionIdsByAgent, listSessionIdsByProject, listSessionMessagePage, updateSession } from './sessionService'
+export { abortChat, discardSessionRuns, sendChat } from './chatService'
+export type { ChatEventPayload } from './chatService'
+export { countSessionsByAgents, createSession, deleteSession, getSession, isSessionRemoved, listMessages, listNewProjectMessages, listSessionIdsByAgent, listSessionIdsByProject, listSessionMessagePage, updateSession } from './sessionService'

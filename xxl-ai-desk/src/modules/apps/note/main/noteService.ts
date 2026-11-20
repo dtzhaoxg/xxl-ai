@@ -7,11 +7,11 @@
  */
 
 import { randomBytes } from 'crypto'
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, cpSync, statSync, writeFileSync } from 'fs'
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'path'
 import { shell } from 'electron'
 import { t } from '@common/main/i18n'
-import { imageMimeOf } from '@common/shared/fileTypes'
+import { IMAGE_EXTENSIONS, imageMimeOf } from '@common/shared/fileTypes'
 import { isWithinRoot, resolveTarget } from '@common/main/utils/pathGuard'
 import type {
   NoteContent,
@@ -21,7 +21,8 @@ import type {
   NoteSettingsPatch
 } from '../shared/contracts'
 import { getAppConfig, patchAppConfig } from '@modules/appCenter/main'
-import { ensureWritableDir, resolveNoteRoot, type ResolvedNoteRoot } from './notePath'
+import { resolveNoteRoot, type ResolvedNoteRoot } from './notePath'
+import { ensureWritableDir } from '@common/main/config/paths'
 
 /* 文本读取上限（与文件工具保持一致） */
 const MAX_TEXT_BYTES = 10 * 1024 * 1024
@@ -29,8 +30,6 @@ const MAX_TEXT_BYTES = 10 * 1024 * 1024
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024
 /* 目录 / 文件名称长度上限 */
 const MAX_NAME_LENGTH = 80
-/* 支持的图片扩展名（与 imageMimeOf 白名单一致，供选择框过滤） */
-export const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif', '.bmp', '.ico', '.svg']
 
 /* 目录解析缓存：设置变更时失效，避免每次请求都做写探针 */
 let rootCache: { configured: string; resolved: ResolvedNoteRoot } | null = null
@@ -65,8 +64,7 @@ export function getNoteSettings(): NoteSettings {
     storageDir: configured,
     resolvedStorageDir: resolved.root,
     defaultStorageDir: resolved.defaultDir,
-    imageDir: join(resolved.root, 'resource', 'image'),
-    storageFallback: resolved.fallback
+    imageDir: join(resolved.root, 'resource', 'image')
   }
 }
 
@@ -180,6 +178,22 @@ export function listNotes(dir?: string): NoteEntry[] {
   }
 }
 
+/* 列出全部笔记目录（含根目录，供新建时选择位置） */
+export function listNoteDirs(): NoteEntry[] {
+  const root = resolvedRoot().root
+  const dirs: NoteEntry[] = [toEntry(root, root)]
+  const walk = (dir: string): void => {
+    for (const entry of listNotes(dir)) {
+      if (entry.isDir) {
+        dirs.push(entry)
+        walk(entry.path)
+      }
+    }
+  }
+  walk(root)
+  return dirs
+}
+
 /* 读取笔记内容 */
 export function readNote(file: string): NoteContent {
   const target = notePathOf(file)
@@ -268,6 +282,52 @@ export function renameNote(source: string, name: string): NoteEntry {
     throw new Error(t('runtime.error.noteNameDuplicate'))
   }
   renameSync(target, next)
+  return toEntry(root, next)
+}
+
+/* 移动笔记 / 目录到目标目录：根目录禁止移动，目录不可移入自身或其子目录 */
+export function moveNote(source: string, targetDir: string): NoteEntry {
+  const root = resolvedRoot().root
+  const target = notePathOf(source)
+  assertNotResource(target)
+  if (resolve(target) === resolve(root)) {
+    throw new Error(t('runtime.error.noteRootMove'))
+  }
+  const dir = notePathOf(targetDir)
+  assertNotResource(dir)
+  if (!existsSync(dir) || !statSync(dir).isDirectory()) {
+    throw new Error(t('runtime.error.noteTargetNotDir'))
+  }
+  const info = statSync(target)
+  /* 已在目标目录内：直接返回，避免重复移动 */
+  if (resolve(dirname(target)) === resolve(dir)) {
+    return toEntry(root, target)
+  }
+  if (info.isDirectory() && isWithinRoot(target, dir)) {
+    throw new Error(t('runtime.error.noteMoveIntoSelf'))
+  }
+  const next = join(dir, basename(target))
+  assertNotResource(next)
+  if (existsSync(next)) {
+    throw new Error(t('runtime.error.noteNameDuplicate'))
+  }
+  renameSync(target, next)
+  return toEntry(root, next)
+}
+
+/* 复制笔记 / 目录：同一目录下生成副本，根目录禁止复制 */
+export function copyNote(source: string): NoteEntry {
+  const root = resolvedRoot().root
+  const target = notePathOf(source)
+  assertNotResource(target)
+  if (resolve(target) === resolve(root)) {
+    throw new Error(t('runtime.error.noteRootCopy'))
+  }
+  const info = statSync(target)
+  const ext = info.isDirectory() ? '' : extname(target)
+  const stem = basename(target, ext)
+  const next = uniquePath(dirname(target), `${stem}-${t('runtime.note.copySuffix')}`, ext)
+  cpSync(target, next, { recursive: info.isDirectory() })
   return toEntry(root, next)
 }
 

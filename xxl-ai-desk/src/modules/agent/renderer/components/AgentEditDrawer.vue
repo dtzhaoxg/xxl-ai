@@ -10,7 +10,7 @@ import { useMcpStore } from '@modules/mcp/renderer'
 import { useSkillStore } from '@modules/skill/renderer'
 import { BUILTIN_TOOL_CATEGORIES, type BuiltinToolCategoryKey } from '@modules/plugin/renderer'
 import { ipcErrorMessage } from '@common/renderer/utils/ipcError'
-import { t } from '@renderer/shell/i18n'
+import { t } from '@common/renderer/i18n'
 import {
   AGENT_AVATAR_PRESETS,
   AGENT_DESCRIPTION_MAX_CHARS,
@@ -277,7 +277,7 @@ watch([visible, () => props.draft], ([opened]) => {
   padding-bottom: 12px;
   overflow-x: hidden;
   font-size: var(--desk-font-base);
-  --el-font-size-base: 14px;
+  --el-font-size-base: var(--desk-font-base);
 }
 
 /* 抽屉正文禁止横向滚动：超长内容用省略号与悬浮提示表达 */

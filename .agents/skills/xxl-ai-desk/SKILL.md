@@ -28,14 +28,15 @@ Renderer ──preload 白名单（DeskApi）──▶ Main ──utilityProcess
 ```
 src/
 ├── common/                         # 一级公共：跨域、无业务规则
-│   ├── shared/                     # 跨进程纯 TS：contracts/(pagination·quickAction)、fileTypes、providerUrl、runtimeLog、appInfo、i18n
+│   ├── shared/                     # 跨进程纯 TS：contracts/(pagination·quickAction)、fileTypes、model、permission、providerUrl、runtimeLog、appInfo、i18n
 │   ├── main/                       # 主进程基础设施：db(getDb) / config/paths / utils(http·logger·pathGuard·ttlCache·directoryWatcher·localFileRoots) / ipc
-│   └── renderer/                   # 渲染公共：api(window.desk) / components(CodeEditor·MarkdownBlock) / composables / config / styles / types / utils
+│   └── renderer/                   # 渲染公共：api(window.desk) / components(CollapseShell·CodeEditor·MarkdownBlock) / composables / config / styles / types / utils
 ├── modules/                        # 单领域模块：一个域一个目录
-│   ├── platform/                   # shared · main · preload · i18n（系统外壳 / 更新 / 运行时环境 / 本地文件协议）
+│   ├── platform/                   # shared · main · preload · renderer · i18n（系统外壳 / 更新 / 运行时环境 / 本地文件协议）
 │   ├── appCenter/                  # shared · main · preload · renderer · i18n（内置应用注册 / 安装启用 / 市场）
 │   ├── apps/{appId}/               # 子应用：shared · main · preload · renderer · i18n（如 apps/note）
 │   ├── settings/                   # shared · main · preload · renderer · i18n
+│   ├── schedule/                   # shared · main · preload · renderer · i18n（定时任务调度）
 │   ├── provider/                   # shared · main · preload · renderer
 │   ├── project/                    # shared · main · preload · renderer · i18n
 │   ├── chat/                       # shared · main · preload · renderer · i18n
@@ -59,6 +60,7 @@ src/
         ├── config/nav.ts
         ├── composables/            # useAppBootstrap / useSessionLifecycle / useQuickAction
         ├── stores/layout.ts
+        ├── appSettings.ts          # 应用设置面板注册表装配
         └── i18n/index.ts           # 渲染层词条组合根
 ```
 
@@ -142,13 +144,14 @@ modules/{domain}/
 - **唯一持久化出口**：`getDb()` 只在 `common/main/db`；各域 `main/schema.ts` 定义表，`main/ddl.ts` 提供建表片段，`src/main/db.ts` 聚合。
 - **运行时门面**：需要运行时能力时，`modules/{domain}/main/*` 编排 → agent 运行时 → worker；`modules/agent/worker` 提供沙箱与工具注册助手。
 - **基础设施独立**：路径解析在 `common/main/config/paths.ts`；`db` 不反向依赖任何领域模块。
-- **本地文件访问**：渲染层一律经 `common/renderer/utils/localFileUrl.ts#toLocalFileUrl()` 转 `desk-file://`，禁止 `file://`；新增文件类型需同步 `common/shared/fileTypes.ts` 与 `index.html` 的 CSP（`img-src` / `media-src`）。
+- **本地文件访问**：渲染层一律经 `common/renderer/utils/localFileUrl.ts#toLocalFileUrl()` 转 `desk-file://`，禁止 `file://`；新增文件类型需同步 `common/shared/fileTypes.ts` 与 `src/renderer/index.html` 的 CSP（`img-src` / `media-src`）。
 - **IPC 三段式**：`modules/{domain}/shared/ipc.ts` 通道 → `main/ipc.ts` 注册 → `preload/index.ts` 暴露；`src/main/ipc.ts`、`src/preload/index.ts` 只聚合。
 - **i18n**：公共词条在 `common/shared/i18n/locales`，领域词条在 `modules/{domain}/i18n/{zh,en}.json`；主进程由 `src/main/i18n.ts`、Worker 由 `modules/agent/worker/i18n.ts`、渲染层由 `shell/i18n/index.ts` 合并后注册。编辑器 / 主题等跨域共用词条放 `common/shared/i18n`。
 - **目录监听**：file / note 共用 `common/main/utils/directoryWatcher.ts#DirectoryWatcher`；各域只做 IPC 边界校验与回调注入，禁止再各写一份 `fs.watch` 逻辑。
 - **本地文件协议放行**：各域通过 `common/main/utils/localFileRoots.ts#registerLocalFileRoot` 登记允许根；`modules/platform` 只做协议 / Range / 路径校验，不感知 project、note 等具体域。
 - **应用设置面板**：appCenter renderer 提供 `appSettings` 注册表；渲染层装配处登记「appId → 设置组件」，appCenter 不反向 import 子应用。
 - **跨域数据**：禁止跨模块读取 `main/schema`；跨域统计 / 级联改为调用所属域 `main/index.ts` 导出的 service 函数。
+- **跨进程纯 Node 工具**：`common/main/utils/*` 中不依赖 Electron / DB / 主进程状态的纯工具（如 `pathGuard`）允许 worker 引用；新增此类文件需在头部注明「主进程与 Agent 运行时共用」，其余 `common/main` 能力仍禁止进入 worker。
 
 ### 1.4 模块边界与职责收拢（硬约束）
 
@@ -184,18 +187,20 @@ modules/{domain}/
 | 主进程业务与编排 | `modules/{domain}/main/*.ts` |
 | 内置应用注册 / 安装启用 / 配置 | `modules/appCenter/{shared,main,preload,renderer}`（`desk_app_setting`） |
 | 子应用（如笔记） | `modules/apps/{appId}/`，路由 `/apps/{appId}` |
-| 平台能力（外壳 / 更新 / 运行时 / 文件协议） | `modules/platform/{shared,main,preload}` |
+| 平台能力（外壳 / 更新 / 运行时 / 文件协议 / 运行期图标） | `modules/platform/{shared,main,preload,renderer}` |
 | 应用设置面板注册 | `modules/appCenter/renderer/appSettings.ts` + `shell/appSettings.ts` 装配 |
 | 目录监听（file / note 等） | `common/main/utils/directoryWatcher.ts#DirectoryWatcher`，域内只做 IPC 校验与回调 |
-| 跨模块编辑器 / Markdown 组件 | `common/renderer/components/{CodeEditor,MarkdownBlock}/` |
+| 跨模块编辑器 / Markdown 组件 | `common/renderer/components/{CodeEditor,MarkdownBlock}/`（含共用的 `EditorThemeMenu`） |
 | Agent 配置 / 项目长期记忆 | `modules/agent/main/{agentService,agentMemoryService,seed}.ts`（`desk_agent`；记忆随 `desk_project.memory*` 保存） |
 | 领域运行时门面 / 审批 / 社区抓取 | `modules/{domain}/main/*`（Agent 运行时在 `modules/agent`） |
 | Agent 工具 / 会话 / MCP | `modules/{agent,mcp,skill,file,browser}/worker/*` |
+| 定时任务调度（规则 / 实例会话 / 休眠 / 并发 / 运行日志 / 巡检） | `modules/schedule/{shared,main,preload,renderer}`；`main/{scheduler,runner,runLog,runState}.ts` 分别负责计时器与巡检、运行编排、运行日志、进程内运行态；任务表 `desk_scheduled_task`，运行日志 `desk_scheduled_log`，运行实例复用 `desk_session` |
 | IPC 注册 | `modules/{domain}/main/ipc.ts`，由 `src/main/ipc.ts` 聚合 |
 | preload 能力片段 | `modules/{domain}/preload/index.ts`，由 `src/preload/index.ts` 聚合 |
 | DeskApi 类型聚合 | `src/preload/deskApi.ts` |
 | 渲染能力入口 | `common/renderer/api/index.ts` |
 | 跨模块组件 | `common/renderer/components/{Name}/index.vue` |
+| 可折叠面板外壳（宽度过渡 + 内容左移） | `common/renderer/components/CollapseShell/` + `common/renderer/composables/useCollapseAnimation.ts` |
 | 布局骨架 / 区域组件 | `renderer/src/shell/layout/{,components/}` |
 | 跨模块组合式函数 / 纯工具 | `common/renderer/{composables,utils}` |
 | 模块页面 / 模块内组件 | `modules/{domain}/renderer/{pages,components}` |
@@ -224,6 +229,12 @@ modules/{domain}/
 - **Agent 是能力编排实体**：`desk_agent` 保存指令、`skill_ids / mcp_ids` 与工具分类开关；会话装配只能取 Agent 已选资源，Agent 保存后由 `agent/main/ipc.ts` 清理绑定会话运行时，下一轮重新装配。
 - **项目记忆按项目维度**：`desk_project.memory_enabled` 控制注入，记忆正文与游标随 `desk_project` 行保存；记忆内容变更后清理项目下会话运行时，禁止在会话表另存一份记忆。
 - **上下文分项只存会话级**：`desk_session.context_breakdown` 是唯一来源，`desk_message.data` 只保存 Pi 原始消息；分项为估算值，删除消息时清空，下一轮重新采集，禁止把 UI 派生字段塞回消息对象。
+- **定时会话标记只由主进程写入**：`desk_session.trigger_type / schedule_task_id` 仅在调度域创建实例会话时设置，渲染层新建会话固定为 `manual`；定时会话的交互由主进程自动结算（权限拒绝 / 提问自行决策），不进入渲染层交互队列。
+- **调度「至多一次 + 阻塞策略」**：同一任务串行；复用会话进行中时按任务 `session_block_policy` 处理——`skip` 跳过本次调度并记「失败跳过」，`force` 终止进行中会话后按原计划时刻重新触发。所有触发（含失败跳过）写 `desk_scheduled_log`，`(task_id, slot_at)` 唯一（立即运行的 `slot_at` 为空，不参与唯一），禁止在任务表用 `last_*` 表达「跳过」。
+- **巡检是全局唯一兜底**：单链 `setTimeout` + 10s 存活看护，任何异常必须续排、链丢失必须自愈；间隔取 `desk_setting.scheduleWatchdogInterval`（30~600s，默认 60）。任务超时取任务字段 `timeout_minutes`（0 不限时），不得改回全局常量。
+- **运行态不落库**：运行中标记、开始时刻、待强制调度请求只在 `schedule/main/runState.ts`（进程内），应用退出自然清空；`desk_scheduled_log` 只做触发追溯（启动时把遗留 `running` 结算为失败；不自动裁剪，由日志页「日志清理」按任务 + 时间范围删除，删除任务时级联清理），`desk_scheduled_task.last_*` 只表达真实运行结果，三者职责分离。
+- **主进程发起的轮次统一 `turn-start`**：`sendChat` 每轮下发 `turn-start`（`userText` / `startedAt`），手动与定时共用；渲染层以 `streamingIds` 去重，外部轮次补建消息并接入 `createChatStream`，复用会话先补齐历史，禁止另建定时专用流式通道。
+- **无人值守交互在主进程结算**：唯一实现在 `chat/main/interactionPolicy.ts#resolveUnattendedInteraction`，按 `request.kind` 返回 `denied`（权限审批）/ `auto`（`ask_user`）；agent 侧只经 `setInteractionAutoResolver` 回调，禁止反向依赖 chat，worker 收到 `auto` 回填 `runtime.hitl.autoDecision` 并继续后续问题。
 - **跨进程文案**：主进程 / worker 的用户可见错误用 `common/shared/i18n` 的 `translate(language, 'runtime.*')`；新增文案禁止硬编码中文（存量待收敛）。
 
 ### 2.2 运行时与资源 [硬]
@@ -247,12 +258,23 @@ modules/{domain}/
 
 | 对象 | 阈值 | 依据 |
 |---|---|---|
-| 函数 | ≤50 行（硬告警 200）；参数 ≤4（硬告警 10）；嵌套 ≤3；认知复杂度 ≤15 | SonarQube |
-| Vue 组件 | ≤1000 行；页面 SFC ≤1000 行 | Vue 风格指南 |
-| service | ≤1000 行 / 导出方法 ≤15 | 模块宽度控制 |
-| 单文件 TS | ≤1000 行 | ESLint `max-lines` |
+| 普通函数 | ≤100 行（硬告警 300）；参数 ≤5（硬告警 10）；嵌套 ≤4；认知复杂度 ≤20 | SonarQube 放宽 + 仓库现状 |
+| 聚合函数（`useXxx` / `createXxx` / Store 初始化） | ≤400 行；内部每个闭包仍按普通函数 ≤100 行 | 聚合函数按「成员」衡量，不按整体行数 |
+| Vue 组件 | ≤1500 行；页面 SFC ≤1500 行 | 一个文件承载一个视图 |
+| service | ≤1500 行 / 导出方法 ≤25 | 模块宽度控制 |
+| 单文件 TS | ≤1500 行 | ESLint `max-lines` |
 
 超限必须回答：**能否按职责拆出新文件/新模块？**
+
+行数是「是否该拆分」的信号而不是目标，**不是拆分依据**。拆分前先过职责判据：
+
+1. **独立变更理由**：两块代码会不会因为不同需求分别改？
+2. **独立复用**：是否被 2 处以上调用，或需要对外暴露？
+3. **状态独立**：是否各自持有状态 / 生命周期，而不是共享同一批临时变量？
+4. **可独立测试**：单独验证是否比整体验证更有意义？
+5. **边界清晰**：拆出去后调用方不需要了解内部时序与准备步骤？
+
+任一项不成立就不拆；共享同一构造过程、靠参数传递半初始化对象、仅有单一调用方的内部步骤，合并在一起更利于生产维护。为压行数而拆按过度设计处理。
 
 ### 2.5 反例（真实踩坑）
 
@@ -267,11 +289,14 @@ modules/{domain}/
 - **单一数据源**：JS 侧尺寸只取 `common/renderer/config/layout.ts#LAYOUT`，CSS 侧取 `common/renderer/styles/tokens.scss`；同一尺寸在两处出现时，改动必须同步，并在注释标注权威方。
 - **跨进程共享尺寸**（窗口最小宽度、顶栏高度等）下沉 `common/shared/`，主进程直接引用常量计算，禁止写魔法数（如窗口 `minWidth`）。
 - **布局不变量**（2026-11 基线）：
+  - 顶栏 38px（`--desk-header-height`）；面板标题栏 36px（`--desk-panel-header-height`）；
   - 图标栏 44px；按需独立于顶栏高度，不共用同一 token；
   - 子菜单：默认 240px、最小 150px、最大由会话区约束；
   - 工具面板：默认视口 50%、最小 150px；文件工具展开目录树时最小 300px；
   - 会话区：最小 400px，任一面板拖动 / 窗口缩放都必须成立；
   - 文件树：默认 240px、最小 150px；文件正文：最小 150px；
+  - 笔记目录树：默认 260px、最小 150px；工具栏宽度低于 880px 时低频动作收进「更多」；
+  - 页面标题区（`PageHeading`）按内容自适应（标题 20px + 说明 16px + 间距），不再保留固定高度 token；
   - 窗口最小宽度需满足上述最小值之和（当前 44 + 150 + 300 + 400 = 894，取 900）。
 - **工具面板宽度约定**：`0` 表示「自动按视口比例」，正数表示用户自定义像素；复位回到自动，不要写死旧默认值。
 - **约束只在 `common/renderer/config/layout.ts` 推导**：`sidebarWidthMax` / `toolPanelWidthMax` / `toolPanelMinWidth` 为纯函数；composable 只做 store 读写与响应式装配，组件内禁止重复硬编码 min/max。
@@ -294,10 +319,10 @@ modules/{domain}/
 
 1. **需求确认（必须）**：模块命名、字段与校验、系统能力（对话框/shell/终端/文件）、页面形态、改动范围、验证范围；确认后写入需求目录的 `方案.md`。
 2. **需求落盘**：`xxl-ai-spec/{yyyyMMdd}-{module}/` 建 `方案.md` 与建表 SQL（SQLite DDL）。
-3. **数据结构**：按 §2.1 同步 `db/schema.ts` 与 `db/index.ts` 的 `DDL`。
+3. **数据结构**：按 §2.1 同步 `modules/{domain}/main/schema.ts` 与 `modules/{domain}/main/ddl.ts`，并由 `src/main/db.ts` 聚合。
 4. **主进程落位**：`modules/{domain}/main/*.ts` + `shared/contracts|ipc|api` + `preload/index.ts`；需要运行时再加 `main/runtime.ts` 与 `worker/*` 实现。
 5. **渲染进程落位**：`modules/{domain}/renderer` 的 store + 页面/组件 + routes + 文案。
-6. **验证**：按 §7 执行（`type-check` → `build` → 端到端）；完成后清理测试数据并恢复用户状态。
+6. **验证**：按 §7 分组执行（先设计原则，再结构 / 契约 / 渲染 / 运行时，最后 `type-check` → `build` → 端到端）；完成后清理测试数据并恢复用户状态。
 
 `方案.md` 最小结构：需求结论 / 数据库设计 / 后端改动 / 前端改动 / 验证结果。
 
@@ -424,7 +449,7 @@ export const useWidgetStore = defineStore('widget', () => {
 shell/layout/index.vue（app-wrapper，纵向）
 ├─ Navbar        全局顶栏（固定最顶部，整体 -webkit-app-region: drag）
 └─ app-body（横向）
-   ├─ Sidebar     SidebarRail（常驻图标栏）+ SidebarContent（可折叠/可拖拽内容区）
+   ├─ Sidebar     SidebarRail（常驻图标栏）+ SidebarContent（首页会话列表可折叠 / 可拖拽；其他板块固定展示）
    │              └─ SidebarContent：ChatSidebarPanel（首页）/ SidebarMenu（插件、设置）
    └─ AppMain     正文（RouterView）
 ```
@@ -432,14 +457,17 @@ shell/layout/index.vue（app-wrapper，纵向）
 - **术语边界**：`layout` 指应用外壳；`nav` 指导航；`sidebar` 指左侧整列；`rail` 指图标栏；`panel` 只指正文内可调整尺寸的面板（工具/终端/文件/浏览器）；`shell` 只用于操作系统 shell（`api.shell`、`desk:shell:*`）。
 - **导航单一来源**：板块 ↔ 入口路径 ↔ 顶栏标题 ↔ 子菜单项均在 `renderer/src/shell/config/nav.ts`（`NAV_SECTIONS` / `SECTION_ENTRY` / `SECTION_ICON`）。新增板块需同步：`nav.ts`、`SidebarRail` 按钮、路由与正文页。
 - **顶栏**：左侧依次为首页图标（纯展示标识，不提供跳转与浮层）与软件名称（`appName` 优先、回落 `app.name`），其后为板块图标 + 标题/操作，标题随路由（首页=会话标题，插件=「插件」，设置=「系统设置」，应用页=应用名称）；软件名称与标题间的细线仅在有标题时展示；交互控件 `no-drag`。顶栏标题只做展示，不重复会话重命名 / 删除等侧栏已有操作。
-- **子菜单**：标题 18px/600，条目 14px/400，选中项 600 + 浅底；不展示 Logo；图标栏常驻。切换板块时子菜单直接跳变并默认展开，只有重复点击当前板块按钮才播放折叠 / 展开动画。
+- **子菜单**：标题 18px/600，条目 14px/400，选中项 600 + 浅底；不展示 Logo；图标栏常驻。切换板块时子菜单直接跳变并默认展开；仅首页会话列表可由顶栏开关折叠 / 展开，其他板块子菜单固定展示。
 - **布局不承载域逻辑**：域内逻辑下沉 `modules/{domain}/renderer`；`SidebarContent` 是唯一装配侧栏域内容的位置。
 - **布局不承载启动逻辑**：`App.vue` 只组装外壳；全局快捷键、设置/项目/会话初始化、会话生命周期与更新检查在 `shell/composables/useAppBootstrap.ts`。
 - **面板宽度约束**：左侧子菜单栏与右侧工具面板均按像素持久化；子菜单栏最小 150px，工具面板最小 150px（文件工具展开目录树时 300px），二者上限都要为会话区保留 400px。
 - **工具面板统一入口**：文件 / Git / 终端 / 浏览器均为右侧工具面板的 Tab，顺序为文件、Git、终端、浏览器；开发者模式追加「诊断」Tab，关闭后回退文件面板。
-- **面板交互统一复用**：拖拽用 `common/renderer/composables/usePanelResize.ts` + `shell/layout/components/PanelResizer/index.vue`；左侧栏宽度走 `shell/stores/layout.ts`，工具面板宽度、文件树宽度等会话级尺寸走 `modules/toolPanel/renderer/store`（按会话持久化）；文件树与文件内容之间的拖拽复用 `PanelResizer`。
+- **顶栏图标按钮统一复用**：顶栏右侧操作（搜索 / 会话列表 / 工具面板）统一用 `shell/layout/components/Navbar/NavbarIconButton.vue`，即时提示与激活态不再各写一份。
+- **页面标题统一复用**：正文顶部标题区统一用 `common/renderer/components/PageHeading`（标题 + 说明 + 分隔线，分隔线与正文 28px 对齐）；TAB 行通过 `title` 插槽替换标题，不再各页自绘标题区。
+- **工具条样式统一复用**：工具条结构统一用全局 `.desk-toolbar` / `.desk-toolbar-btn` / `.desk-toolbar-divider`，禁止模块内再定义一套 `.toolbar-btn` 副本；编辑器主题下拉统一用 `CodeEditor/EditorThemeMenu`。
+- **面板交互统一复用**：拖拽用 `common/renderer/composables/usePanelResize.ts` + `shell/layout/components/PanelResizer/index.vue`；折叠用 `common/renderer/components/CollapseShell` + `useCollapseAnimation`（会话列表 / 笔记目录 / 文件树共用，禁止各写一份宽度与位移过渡）；左侧栏宽度走 `shell/stores/layout.ts`，工具面板宽度、文件树宽度等会话级尺寸走 `modules/toolPanel/renderer/store`（按会话持久化）；文件树与文件内容之间的拖拽复用 `PanelResizer`。
 - **共享选中态归属域**：跨「子菜单 ↔ 页面」的选中态放所属域 store（如 `modules/settings/renderer/store` 的 `activeTab`），不塞进 `layout`。
-- **配色分层**：`--desk-chrome-bg`（顶栏+图标栏）> `--desk-panel-bg`（子菜单栏）> `--desk-bg`（正文）；不加分隔线，仅「子菜单栏 ↔ 正文」保留 1px `--desk-border`。
+- **配色分层**：`--desk-surface-chrome`（顶栏+图标栏）> `--desk-surface-panel`（子菜单栏）> `--desk-surface-content`（正文）；不加分隔线，仅「子菜单栏 ↔ 正文」保留 1px `--desk-border`。
 - **尺寸令牌**：`--desk-header-height`、`--desk-rail-width`、`--desk-sidebar-width`、`--desk-terminal-height`、`--desk-panel-header-height`；JS 侧尺寸统一取 `common/renderer/config/layout.ts#LAYOUT`；自绘 SVG 统一 `.desk-svg-icon`，尺寸由使用处覆盖。
 - **字体层级**：文字统一使用 `--desk-font-{xs,sm,base,md,lg,xl}`，图标字号使用 `--desk-icon-md`；禁止在组件内新增绝对 px 字号。
 
@@ -455,7 +483,8 @@ shell/layout/index.vue（app-wrapper，纵向）
   - 目录树只展示目录与 `.md`，根级 `resource` 与隐藏项不展示；
   - 目录树实时监听复用 `common/main/utils/directoryWatcher.ts`（按已展开目录非递归监听，50ms 去抖），渲染层只重载变更目录；
   - 笔记渲染层 `store` 负责监听生命周期（`bindWatcher` / `unbindWatcher`），组件只处理 UI；
-  - 工具栏为三段式：左树开关、中视图切换、右查找/插图/主题/文章目录；文章目录为浮动面板，仅再次点击图标关闭；
+  - 工具栏为左右两段式：左侧树开关 + Markdown 格式化动作（标题 / 加粗 / 斜体 / 删除线 / 行内代码 / 引用 / 链接 / 图片 / 代码块 / 列表 / 表格 / 分割线 / 公式 / Mermaid / 更多），右侧查找、目录、主题、帮助与视图切换；仅当工具栏宽度不足时才出现「更多」；
+  - 文章目录为右侧可关闭模块（标题栏 + 关闭按钮），不再使用浮动面板；帮助为弹窗，上半部分展示 Markdown 语法示例，下半部分展示快捷键；
   - 编辑器主题与文件工具共用 `EDITOR_THEME_STORAGE_KEY`（`common/renderer/components/CodeEditor/editorThemes.ts`）。
 
 ## 6. Agent 运行时
@@ -469,10 +498,11 @@ shell/layout/index.vue（app-wrapper，纵向）
 | 会话压缩 | `modules/chat/main/sessionSummaryService.ts` + `modules/agent/worker/summary.ts` | 摘要存 `desk_session.summary*`；无摘要 / 上下文 ≥80% / 摘要后轮次 ≥20 时异步压缩 |
 | 上下文分项 | `modules/agent/worker/session.ts` + `modules/chat/main/sessionService.ts` | 每次响应用估算值（CJK 1 token/字、其余 4 字符/token）回传；存 `desk_session.context_breakdown`，每轮更新，删除消息时清空 |
 | 内置工具 | `modules/{file,browser,agent,skill}/worker/*` | `createBuiltinToolEntries()` 用 `Type.Object` 定义 `AgentTool`；只读工具常驻，写 / 命令类需「工作区内修改」及以上权限；是否进入「内置工具」页见 §6.1 |
-| 文件类工具 | `modules/file/worker/*` + `modules/agent/worker/sandbox.ts` | 必须先过 `guardPath({ sessionId, rootDir, target, action, tool, permissionMode, trustedRoots })`，越界返回拦截错误 |
+| 文件类工具 | `modules/file/worker/*` + `modules/agent/worker/sandbox.ts` | 必须先过 `guardPath({ sessionId, rootDir, target, action, tool, permissionMode, trustedRoots })`（多目标用 `guardPaths({ targets: [...] })`），越界返回拦截错误 |
 | 越界审批 | `modules/agent/worker/{sandbox,hitl}.ts` + `modules/agent/main/host/interaction.ts` | worker 经 `parentPort` 发 `interaction-request`，主进程转渲染层在输入框位置内联展示审批面板（按会话隔离），回传 `allow`（可 `remember`）/ `deny` |
 | MCP | `modules/mcp/worker/*` | 使用 Pi 官方 `@earendil-works/pi-mcp`；工具转换 `toLlmContent` + `Type.Unsafe` + `signal`；只装配 Agent 选中的服务 |
 | 会话装配 | `modules/agent/worker/session.ts` | 会话级 Agent 缓存 + 事件流 + 工具合并；systemPrompt = Agent 指令 + 长期记忆 + 会话摘要 + SKILL 索引 + 权限/工具约束 |
+| 定时任务运行 / 无人值守 | `modules/schedule/main/{runner,runLog,runState}.ts` + `modules/chat/main/interactionPolicy.ts` | 会话选择与阻塞策略在 `runner`；运行日志与进程内运行态分离；定时会话交互在主进程按 `kind` 自动结算 |
 | 工具注册表 | `modules/agent/worker/tools/index.ts` | 按 `ToolGroup` 聚合工厂，`createBuiltinToolEntries()` 统一按权限 / 开关过滤并裁剪输出；`toolkit.ts` 提供 `ALL_PERMISSIONS` / `WRITE_PERMISSIONS` / `describe` / `toolError` / `createGuard` |
 | 协议 | `modules/agent/shared/agentProtocol.ts` | 改 `HostEvent`/`WorkerRequest` 需同步 worker.ts、session.ts、runtimeHost.ts |
 | 模型 | `modules/agent/worker/models.ts` | `normalizeBaseUrl`、`buildModels`、`{session}` 占位替换 |
@@ -504,7 +534,8 @@ shell/layout/index.vue（app-wrapper，纵向）
   - 「启用」只决定提示词注入与 `read_skill` 是否可用（使用权限）；
   - 禁止用「是否启用」限制 `read_file` / `list_directory` / 技能库读取。
 - **技能根目录由主进程每轮下发**（`RunAgentInput.skillsDir`）；工具侧禁止自行推断或拼接技能目录。
-- **越界审批只走统一闸门**：`guardPath` → `hitl` → 主进程 → 渲染层；新增文件 / 命令工具必须复用 `createGuard` / `guardPath`，禁止自写路径判断。
+- **越界审批只走统一闸门**：`guardPath` / `guardPaths` → `hitl` → 主进程 → 渲染层；新增文件 / 命令工具必须复用 `createGuard` / `guardPath` / `guardPaths`，禁止自写路径判断。
+- **一次调用一次审批**：同一次工具调用的多个越界目标必须合并为一张卡片（`guardPaths({ targets })`），一次应答覆盖全部目标；禁止按目标逐个弹卡。目标为磁盘根目录时在卡片内标注「全盘」并提示扫描耗时。
 - **`run_command` 的路径识别只防误操作，不是安全边界**：动态展开（`$VAR`、命令替换）、解释器（`python -c`、`sh -c`）无法覆盖；不要为它叠加脆弱的「只读命令白名单」或其它启发式解析。
 - **会话信任粒度**：`sessionTrusted` 仅在 `workspace-write` 的越界审批中生效，为会话级全量放行；后续扩展必须收敛为「目录 + 动作」粒度，避免一次授权放大到全部读写命令。
 
@@ -512,6 +543,7 @@ shell/layout/index.vue（app-wrapper，纵向）
 
 - **内联而非弹窗**：权限审批与 `ask_user` 统一占用输入框位置展示（`InteractionPanel`），不再使用全局模态对话框；`App.vue` 不挂交互宿主。
 - **按会话隔离**：交互队列按 `sessionId` 分组，只展示当前会话的请求；其它会话的请求留在各自队列，切回时再展示，禁止跨会话抢占输入区。
+- **无人值守自动结算**：`trigger_type='schedule'` 的会话在推送渲染层前由 `chat/main/interactionPolicy.ts` 直接给出结果——权限审批 `denied`、`ask_user` `auto`（交回模型自行决策），禁止把定时会话的请求塞进渲染层队列，也禁止把两类交互统一成一种结果。
 - **标题与配色固定**：权限审批标题固定「权限审批申请」、淡红色系；`ask_user` 标题固定「用户确认」、黄色系；两类共用同一卡片布局。
 - **多问题**：`ask_user` 支持 `questions` 数组（1~10 个），由 worker 逐题发起并回传；契约使用 `round` / `total`，渲染层在左下角展示 `1/N`。
 - **取消只走显式路径**：用户终止、删除会话、运行时重置 / 退出才取消交互；运行期间后台摘要、长期记忆或配置刷新触发的 `evict` 必须延后到本轮结束（`runtimeHost.pendingEvictions`），禁止取消正在等待的审批。
@@ -529,37 +561,64 @@ shell/layout/index.vue（app-wrapper，纵向）
 
 ## 7. 校验清单
 
+**顺序固定：先过 §7.1 设计原则，再按分组核对实现细节。设计原则不过，其余项一律视为未通过。**
+
+### 7.1 设计原则（必查，对应 `AGENTS.md` §三）
+
+- [ ] **DRY**：同一段逻辑出现第三次才抽公共实现；不存在为「将来复用」预建的抽象层。
+- [ ] **KISS**：实现最直接，无假想需求；未新增非必要的接口 / 工厂 / 配置项 / 包装函数 / 扩展点。
+- [ ] **单一职责**：一个文件 / 函数 / 组件只有一个变更理由；渲染、消毒、交互、状态等边界未混在一起。
+- [ ] **同类场景同一套方案**：优先复用已有工具 / 组件；若另起一套，已说明旧方案为何不适用。
+- [ ] 反向自查：本改动既无过度设计（抽象 / 分层 / 配置多余），也无重复实现（同一职责多处代码）。
+
+### 7.2 结构与落位
+
 - [ ] 需求目录 `xxl-ai-spec/{yyyyMMdd}-{module}/` 存在，`方案.md` 与 SQL 同步。
 - [ ] 结构一致：`modules/{domain}/main/schema.ts` / `ddl.ts`，并由 `src/main/db.ts` 聚合。
-- [ ] `common/main/db#getDb()` 是唯一持久化出口；`src/main/ipc.ts` / `src/main/db.ts` / `src/main/i18n.ts` / `src/preload/index.ts` / `shell/router` / `shell/i18n` 仅聚合；契约 / IPC 常量 / Api / preload 齐备。
-- [ ] 依赖方向符合 §1.3；配置与运行时未耦合；运行时使用官方方案。
 - [ ] 顶层目录保持 `src/common` + `src/modules`，未新增其它顶层分层或 `modules` 下的框架 / 业务嵌套层。
 - [ ] 新增 `common` 内容满足「≥2 个领域使用且无业务规则」；`common` 内无领域名，单域逻辑未外溢。
-- [ ] 领域文案在 `modules/{domain}/i18n`，公共词条在 `common/shared/i18n`，zh/en 成对。
+- [ ] `common/main/db#getDb()` 是唯一持久化出口；`src/main/ipc.ts` / `src/main/db.ts` / `src/main/i18n.ts` / `src/preload/index.ts` / `shell/router` / `shell/i18n` 仅聚合；契约 / IPC 常量 / Api / preload 齐备。
+- [ ] 依赖方向符合 §1.3；配置与运行时未耦合；运行时使用官方方案。
 - [ ] 同一职责域只有一处实现，跨模块仅经公共入口；`index.ts` 无未使用导出、无循环 / 双向依赖。
 - [ ] 外壳、`src/main/ipc.ts`、调用方未承载域内校验 / 归一 / 默认值 / 级联清理。
 - [ ] 新增/变更依赖为精确版本（无 `^` / `~` / 区间）；lock 当前被 `.gitignore` 忽略，如放开需同步提交。
+
+### 7.3 契约与数据
+
 - [ ] 通道 `desk:{module}:{action}`；时间 ISO；布尔归一。
-- [ ] 会话已绑定项目与 Agent；能力只从 Agent 读取，Agent / 记忆变更后已清理关联会话运行时；默认与占用中的 Agent 未被删除。
 - [ ] 上下文分项只存 `desk_session.context_breakdown`；`desk_message.data` 未被写入 UI 派生字段；删除消息后分项已清空。
-- [ ] 渲染仅经 `api`；路由已登记；文案 `t()` / 主进程 `translate()` 且 zh/en 成对；无硬编码中文。
+- [ ] 定时调度：`desk_scheduled_log` 承担触发追溯（`(task_id, slot_at)` 唯一，`slot_at` 为空不参与），`last_*` 只写真实运行结果，运行态只在 `schedule/main/runState.ts`，未把「跳过」写回任务表；日志不自动裁剪，清理入口与删除任务级联均已闭环。
 - [ ] 内置应用仅在 `appCenter` 注册表登记；安装 / 启用 / 配置统一走 `desk_app_setting`；应用页隐藏外壳子菜单、顶栏取应用名、启用后图标栏出现入口。
+
+### 7.4 渲染、i18n 与界面
+
+- [ ] 渲染仅经 `api`；路由已登记；文案 `t()` / 主进程 `translate()` 且 zh/en 成对；无硬编码中文。
+- [ ] 领域文案在 `modules/{domain}/i18n`，公共词条在 `common/shared/i18n`，zh/en 成对。
+- [ ] UI 复用 tokens / 外壳 / 列表规范；弹层 append-to-body 且拖拽区可用；全局样式已验证影响面。
+- [ ] 布局尺寸变更已同步 `common/renderer/config/layout.ts` 与 `common/renderer/styles/tokens.scss`；跨进程尺寸使用共享常量，无魔法数。
+- [ ] 折叠交互复用 `CollapseShell` + `useCollapseAnimation`，未新增手写的宽度 / 位移过渡与折叠状态机。
+- [ ] 侧栏导航：切换板块直接跳变并默认展开；仅首页会话列表可折叠，其他板块固定展示；应用页直接收起，不播放动画。
 - [ ] 目录监听复用 `common/main/utils/directoryWatcher.ts`；渲染层只重载变更目录，页面对应 `bindWatcher` / `unbindWatcher`，退出时 `dispose` 清理。
-- [ ] 侧栏导航：切换板块直接跳变并默认展开，只有重复点击当前板块才播放折叠动画；应用页直接收起，不播放动画。
+
+### 7.5 Agent 运行时与安全边界
+
+- [ ] 会话已绑定项目与 Agent；能力只从 Agent 读取，Agent / 记忆变更后已清理关联会话运行时；默认与占用中的 Agent 未被删除。
 - [ ] 「内置工具」仅收录客户端核心能力，未混入 MCP / SKILL 等插件内部工具。
 - [ ] 人机交互按会话隔离并占用输入框位置；权限 / 用户确认标题与配色固定；多问题使用 `round` / `total`；后台 `evict` 已延后到本轮结束，未误取消审批。
-- [ ] UI 复用 tokens/外壳/列表规范；弹层 append-to-body 且拖拽区可用；全局样式已验证影响面。
-- [ ] 布局尺寸变更已同步 `common/renderer/config/layout.ts` 与 `common/renderer/styles/tokens.scss`；跨进程尺寸使用共享常量，无魔法数。
+- [ ] 定时会话的交互在主进程按 `kind` 自动结算（权限 `denied` / 提问 `auto`），未进入渲染层交互队列；`turn-start` 外部轮次已接入流式并以 `streamingIds` 去重。
 - [ ] 技能库读写不触发审批；`read_skill` 仍只认已启用技能；未新增脆弱的 shell 只读命令白名单。
-- [ ] 资源生命周期闭环；超时/取消/失败隔离/进程无残留。
-- [ ] `npm run type-check`、`npm run build` 通过；涉及 IPC/运行时完成端到端验证。
-- [ ] 注释与命名符合既有风格；无死代码/调试残留/测试数据。
+
+### 7.6 交付与验证
+
+- [ ] 资源生命周期闭环；超时 / 取消 / 失败隔离 / 进程无残留。
+- [ ] `npm run type-check`、`npm run build` 通过；涉及 IPC / 运行时完成端到端验证。
+- [ ] 注释与命名符合 `AGENTS.md`「通用约定」；无死代码 / 调试残留 / 测试数据。
 
 ## 8. 参考实现
 
 - 主进程：`modules/chat/main/chatService.ts`（编排）、`modules/chat/main/sessionService.ts`（CRUD + 级联）、`modules/agent/main/{agentService,agentMemoryService}.ts`、`modules/agent/main/host/runtimeHost.ts`
 - 渲染：`modules/mcp/renderer/{pages,components}`（管理 + 发现）、`modules/chat/renderer/store/{index,stream}.ts`
-- 内置应用：`modules/appCenter/**`（注册表 / 安装启用 / 市场）、`modules/apps/note/**`（目录树 / 编辑器 / 浮动目录 / 目录监听）
-- 公共能力：`common/main/utils/directoryWatcher.ts`（目录监听）、`common/renderer/components/CodeEditor/`（编辑器与主题）
+- 内置应用：`modules/appCenter/**`（注册表 / 安装启用 / 市场）、`modules/apps/note/**`（目录树 / 编辑器 / 右侧文章目录 / 目录监听）
+- 公共能力：`common/main/utils/directoryWatcher.ts`（目录监听）、`common/renderer/components/CollapseShell/`（折叠面板外壳）、`common/renderer/components/CodeEditor/`（编辑器与主题）
 - 运行时：`modules/agent/worker/session.ts`、`modules/agent/worker/tools/index.ts`、`modules/agent/worker/toolkit.ts`
 - 构建：`package.json`（`type-check` / `build` / `dev`）、`electron.vite.config.ts`

@@ -1,17 +1,33 @@
 /* 设置与供应商状态 */
 
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from '@common/renderer/api'
-import { setLanguage, t } from '@renderer/shell/i18n'
+import { toLocalFileUrl } from '@common/renderer/utils/localFileUrl'
+import { setLanguage, t } from '@common/renderer/i18n'
+import builtinLogo from '@resources/icon.png'
 import { createDefaultSettings } from '@modules/settings/shared'
-import type { AppSettings } from '@modules/settings/shared'
+import type { AppSettings, BrandingAssets, BrandingKind, SessionDefaults } from '@modules/settings/shared'
 import type { RuntimeDetectResult, RuntimeExecInput, UpdateInfo } from '@modules/platform/shared'
 
 export const useSettingsStore = defineStore('settings', () => {
   /* 应用设置（默认值与主进程共用 shared/defaults） */
   const settings = ref<AppSettings>(createDefaultSettings())
+  /* 品牌资源：自定义 Logo / 背景图绝对路径（空串表示内置资源） */
+  const branding = ref<BrandingAssets>({ logoPath: '', backgroundPath: '' })
+  /* 自定义 Logo 的本地文件 URL（未设置时为空，使用方回退内置图标） */
+  const logoUrl = computed(() =>
+    branding.value.logoPath ? toLocalFileUrl(branding.value.logoPath) : ''
+  )
+  /* 对话区背景图的本地文件 URL（未设置时为空） */
+  const backgroundUrl = computed(() =>
+    branding.value.backgroundPath ? toLocalFileUrl(branding.value.backgroundPath) : ''
+  )
+  /* Logo 展示地址：自定义图片优先，未设置时回落内置图标（空态 / 关于页 / 设置预览共用） */
+  const displayLogoUrl = computed(() => logoUrl.value || builtinLogo)
+  /* 应用名称展示文案：自定义名称优先，未设置时回落默认名称（顶栏 / 窗口标题 / 关于页共用） */
+  const displayAppName = computed(() => settings.value.appName || t('app.name'))
   /* 设置是否已首次加载 */
   const loaded = ref(false)
   /* 运行时数据目录（含默认目录与库文件路径） */
@@ -30,6 +46,8 @@ export const useSettingsStore = defineStore('settings', () => {
 
   /* 系统设置子菜单当前分类（UI 选中态，供左侧子菜单与设置页共享），默认模型供应商 */
   const activeTab = ref('providers')
+  /* 新建会话默认配置写入队列：连续切换项目 / Agent / 模型时按序合并，避免相互覆盖 */
+  let sessionDefaultsQueue: Promise<void> = Promise.resolve()
 
   /* 已启用的供应商 */
   /* 应用外观与主题预设到 DOM（Element Plus 深色模式依赖 html.dark） */
@@ -59,7 +77,12 @@ export const useSettingsStore = defineStore('settings', () => {
 
   /* 首次加载设置与供应商 */
   async function load(): Promise<void> {
-    settings.value = await api.settings.get()
+    const [nextSettings, assets] = await Promise.all([
+      api.settings.get(),
+      api.settings.getBranding()
+    ])
+    settings.value = nextSettings
+    branding.value = assets
     const info = await api.app.info()
     version.value = info.version
     dataDir.value = info.dataDir
@@ -91,6 +114,32 @@ export const useSettingsStore = defineStore('settings', () => {
     const patch: Partial<AppSettings> = {}
     patch[key] = value
     await saveSettings(patch)
+  }
+
+  /* 选择品牌图片：系统对话框 + 复制落盘由主进程完成；返回是否实际变更 */
+  async function selectBranding(kind: BrandingKind): Promise<boolean> {
+    const assets = await api.settings.selectBranding(kind)
+    if (!assets) {
+      return false
+    }
+    branding.value = assets
+    return true
+  }
+
+  /* 恢复默认 Logo / 移除背景图 */
+  async function resetBranding(kind: BrandingKind): Promise<void> {
+    branding.value = await api.settings.resetBranding(kind)
+  }
+
+  /* 更新新建会话默认配置：合并后整体写入一条 JSON，避免设置表键值膨胀 */
+  function saveSessionDefaults(patch: Partial<SessionDefaults>): Promise<void> {
+    const next = sessionDefaultsQueue.catch(() => undefined).then(async () => {
+      await saveSettings({
+        sessionDefaults: { ...settings.value.sessionDefaults, ...patch }
+      })
+    })
+    sessionDefaultsQueue = next
+    return next
   }
 
   /* 选择数据目录（系统对话框，取消返回空串） */
@@ -159,11 +208,16 @@ export const useSettingsStore = defineStore('settings', () => {
 
   /* 切换当前供应商（同步默认模型） */
   async function selectProvider(providerId: number, modelId = ''): Promise<void> {
-    await saveSettings({ providerId, modelId })
+    await saveSessionDefaults({ providerId, modelId })
   }
 
   return {
     settings,
+    branding,
+    logoUrl,
+    backgroundUrl,
+    displayLogoUrl,
+    displayAppName,
     loaded,
     dataDir,
     defaultDataDir,
@@ -173,6 +227,9 @@ export const useSettingsStore = defineStore('settings', () => {
     load,
     saveSettings,
     saveSetting,
+    selectBranding,
+    resetBranding,
+    saveSessionDefaults,
     selectDataDir,
     saveDataDir,
     openDataDir,

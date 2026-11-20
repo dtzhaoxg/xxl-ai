@@ -5,7 +5,7 @@
  */
 import { computed } from 'vue'
 import { useSettingsStore } from '@modules/settings/renderer'
-import { t } from '@renderer/shell/i18n'
+import { t } from '@common/renderer/i18n'
 
 const settings = useSettingsStore()
 
@@ -30,7 +30,7 @@ const developerMode = computed({
 </template>
 
 <style scoped lang="scss">
-@use '../../../../common/renderer/styles/settingsBlock.scss';
+@use '@common/renderer/styles/settingsBlock.scss';
 
 .developer {
   margin-top: 28px;

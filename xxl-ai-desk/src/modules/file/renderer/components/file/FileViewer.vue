@@ -4,12 +4,16 @@
  * @author xuxueli 2026-10-25
  */
 import { computed, defineAsyncComponent, ref, watch } from 'vue'
+import { ElImageViewer } from 'element-plus'
 import { MarkdownBlock } from '@common/renderer/components'
 import { toLocalFileUrl } from '@common/renderer/utils/localFileUrl'
 import { parentDir } from '@modules/file/renderer/utils/path'
-import { t } from '@renderer/shell/i18n'
+import { t } from '@common/renderer/i18n'
 import type { FileContent } from '@modules/file/shared'
-import type { EditorThemeId } from '@common/renderer/components/CodeEditor/editorThemes'
+import {
+  editorThemeVars,
+  type EditorThemeId
+} from '@common/renderer/components/CodeEditor/editorThemes'
 
 /* 代码编辑器按需加载：未进入编辑态时不加载 CodeMirror */
 const CodeEditor = defineAsyncComponent(() => import('@common/renderer/components/CodeEditor/CodeEditor.vue'))
@@ -30,9 +34,11 @@ const props = defineProps<{
   saving: boolean
   /* 编辑器主题 */
   editorTheme?: EditorThemeId
+  /* 同目录图片路径（放大预览内左右切换） */
+  imagePaths: string[]
 }>()
 const draft = defineModel<string>('draft', { required: true })
-const emit = defineEmits<{ save: [] }>()
+const emit = defineEmits<{ save: []; 'switch-image': [path: string] }>()
 
 /* Markdown 预览渲染上限：超长文档只渲染前段，避免解析/排版阻塞界面 */
 const MAX_MARKDOWN_PREVIEW = 400000
@@ -45,14 +51,63 @@ const mediaUrl = computed(() => {
   return toLocalFileUrl(props.file.path)
 })
 
-/* 音视频解码失败提示（切换文件后复位） */
+/* 图片预览地址：同样走本地协议，避免整图 base64 经 IPC 传输并绕过体积上限 */
+const imageUrl = computed(() => {
+  if (!props.file || !props.isImage) {
+    return ''
+  }
+  return toLocalFileUrl(props.file.path)
+})
+
+/* 放大预览的图片列表（同目录图片），用于左右切换 */
+const imageUrls = computed(() => {
+  if (props.imagePaths.length > 0) {
+    return props.imagePaths.map((path) => toLocalFileUrl(path))
+  }
+  return imageUrl.value ? [imageUrl.value] : []
+})
+/* 当前图片在列表中的位置（不在列表中时退回首张） */
+const imageIndex = computed(() => {
+  const index = props.file ? props.imagePaths.indexOf(props.file.path) : -1
+  return index >= 0 ? index : 0
+})
+
+/* 音视频解码 / 图片加载失败提示（切换文件后复位） */
 const mediaError = ref('')
+const imageLoadError = ref('')
+/* 图片放大预览弹层可见态 */
+const imageViewerVisible = ref(false)
+/* 图片列表清空（文件被删除 / 目录切换）时关闭弹层，避免残留已失效图片 */
+watch(
+  () => imageUrls.value.length,
+  (length) => {
+    if (length === 0) {
+      imageViewerVisible.value = false
+    }
+  }
+)
 watch(
   () => props.file?.path,
   () => {
     mediaError.value = ''
+    imageLoadError.value = ''
   }
 )
+
+/* 打开图片放大预览：点击图片弹出遮罩，支持缩放与旋转 */
+function openImageViewer(): void {
+  if (imageUrl.value && !imageLoadError.value) {
+    imageViewerVisible.value = true
+  }
+}
+
+/* 弹层内左右切换：同步选中文件，关闭弹层时正文与面包屑保持一致 */
+function onImageViewerSwitch(index: number): void {
+  const path = props.imagePaths[index]
+  if (path) {
+    emit('switch-image', path)
+  }
+}
 
 /* Markdown 预览内容：超长文档截断渲染，并给出提示 */
 const markdownPreviewTruncated = computed(
@@ -65,6 +120,9 @@ const markdownPreviewContent = computed(() => {
 
 /* 只读代码行数（编辑态行号由 CodeMirror 提供） */
 const lineCount = computed(() => (props.file ? props.file.content.split('\n').length : 0))
+
+/* Markdown 预览配色：与编辑器主题保持一致，不随应用皮肤变化 */
+const markdownPreviewStyle = computed(() => editorThemeVars(props.editorTheme))
 
 /* 透传编辑器保存事件 */
 function onSave(): void {
@@ -88,12 +146,21 @@ function onSave(): void {
       <div v-else-if="showPreview && markdownPreviewTruncated" class="viewer-banner">
         {{ t('panel.previewTruncated') }}
       </div>
-      <div v-if="showPreview && isImage && file.dataUrl" class="viewer-image">
-        <img :src="file.dataUrl" :alt="file.name" />
+      <div v-if="showPreview && isImage" class="viewer-image">
+        <img
+          v-if="!imageLoadError"
+          :src="imageUrl"
+          :alt="file.name"
+          :title="t('panel.preview')"
+          @error="imageLoadError = t('panel.loadFail')"
+          @click="openImageViewer"
+        />
+        <div v-else class="viewer-empty error">{{ imageLoadError }}</div>
       </div>
       <MarkdownBlock
         v-else-if="showPreview && isMarkdown"
         class="viewer-markdown"
+        :style="markdownPreviewStyle"
         :content="markdownPreviewContent"
         :base-dir="parentDir(file.path)"
       />
@@ -141,6 +208,16 @@ function onSave(): void {
         </div>
       </div>
     </template>
+    <!-- 图片放大预览：独立于内容分支，切换图片 / 加载态变化时不卸载重挂，避免白屏闪烁 -->
+    <ElImageViewer
+      v-if="imageViewerVisible && imageUrls.length > 0"
+      :url-list="imageUrls"
+      :initial-index="imageIndex"
+      hide-on-click-modal
+      teleported
+      @switch="onImageViewerSwitch"
+      @close="imageViewerVisible = false"
+    />
   </div>
 </template>
 
@@ -200,14 +277,15 @@ function onSave(): void {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  min-width: 48px;
-  padding: 12px 12px 12px 16px;
+  min-width: 30px;
+  padding: 12px 8px 12px 10px;
   background: var(--desk-code-bg);
   border-right: 1px solid var(--desk-code-border);
   text-align: right;
   color: var(--desk-text-tertiary);
   font-family: 'SFMono-Regular', ui-monospace, Menlo, Consolas, monospace;
-  font-size: var(--desk-font-sm);
+  /* 与 CodeEditor 行号栏保持一致：小字号 + 紧凑间距 */
+  font-size: var(--desk-font-xs);
   line-height: 22px;
   font-variant-numeric: tabular-nums;
   user-select: none;
@@ -241,6 +319,8 @@ function onSave(): void {
   min-height: 0;
   overflow: auto;
   padding: 16px 20px;
+  background: var(--desk-bg);
+  color: var(--desk-text);
   font-size: var(--desk-font-base);
 }
 
@@ -260,7 +340,7 @@ function onSave(): void {
   max-width: 100%;
   max-height: 100%;
   border-radius: var(--desk-radius-sm);
-  background: #000;
+  background: var(--desk-media-backdrop);
 }
 
 .viewer-media audio {
@@ -284,6 +364,7 @@ function onSave(): void {
   max-height: 100%;
   object-fit: contain;
   border-radius: var(--desk-radius-sm);
+  cursor: zoom-in;
 }
 
 .spin {

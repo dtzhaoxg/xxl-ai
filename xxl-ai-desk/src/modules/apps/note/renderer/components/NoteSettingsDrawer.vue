@@ -6,7 +6,8 @@
 import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from '@common/renderer/api'
-import { t } from '@renderer/shell/i18n'
+import { ipcErrorMessage } from '@common/renderer/utils/ipcError'
+import { t } from '@common/renderer/i18n'
 import { useNoteStore } from '@modules/apps/note/renderer/store'
 import { useAppCenterStore } from '@modules/appCenter/renderer'
 
@@ -25,19 +26,27 @@ const storageDirDirty = computed(
   () => storageDirInput.value.trim() !== store.settings.storageDir
 )
 
-/* 抽屉打开时加载存储目录配置并同步草稿 */
-watch(visible, async (open) => {
-  if (!open) {
-    return
-  }
-  storageDirInput.value = store.settings.storageDir
-  await store.loadSettings()
-  storageDirInput.value = store.settings.storageDir
-})
+/*
+ * 抽屉打开时加载存储目录配置并同步草稿。
+ *   - immediate：组件按需挂载（首次打开才创建），需要立即按当前可见状态加载；
+ *   - 未加载完成前先回填已有配置，避免输入框与「默认目录」占位文案空白。
+ */
+watch(
+  visible,
+  async (open) => {
+    if (!open) {
+      return
+    }
+    storageDirInput.value = store.settings.storageDir
+    await store.loadSettings()
+    storageDirInput.value = store.settings.storageDir
+  },
+  { immediate: true }
+)
 
 /* 错误对象 → 可读文本 */
 function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
+  return ipcErrorMessage(error)
 }
 
 /* 切换启用：保存失败时开关保持原值 */
@@ -145,10 +154,6 @@ async function openDir(path: string): Promise<void> {
           {{ t('note.defaultDir', [store.settings.defaultStorageDir]) }}
         </div>
       </div>
-
-      <div v-if="store.settings.storageFallback" class="setting-alert">
-        {{ t('note.storageFallback') }}
-      </div>
     </div>
 
     <template #footer>
@@ -215,16 +220,6 @@ async function openDir(path: string): Promise<void> {
   color: var(--desk-text-tertiary);
   font-size: var(--desk-font-xs);
   word-break: break-all;
-}
-
-.setting-alert {
-  padding: 8px 12px;
-  border: 1px solid var(--desk-border);
-  border-radius: 8px;
-  background: var(--desk-bg-elevated);
-  color: var(--desk-warning, var(--desk-text-secondary));
-  font-size: var(--desk-font-xs);
-  line-height: 1.5;
 }
 
 .setting-footer {

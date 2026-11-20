@@ -8,7 +8,8 @@ import { useAgentStore } from '@modules/agent/renderer'
 import { useChatStore } from '@modules/chat/renderer'
 import { useSettingsStore } from '@modules/settings/renderer'
 import { useProviderStore } from '@modules/provider/renderer'
-import { t } from '@renderer/shell/i18n'
+import { t } from '@common/renderer/i18n'
+import { DeskTooltip } from '@common/renderer/components'
 import ChatFilePicker from '@modules/chat/renderer/components/ChatFilePicker.vue'
 import SessionStatusBar from '@modules/chat/renderer/components/SessionStatusBar.vue'
 import { relativeToRoot } from '@modules/chat/renderer/utils/path'
@@ -17,9 +18,12 @@ import {
   DEFAULT_REASONING_LEVEL,
   REASONING_LEVELS,
   isReasoningModel,
-  isSessionModel,
   type ReasoningLevel
 } from '@common/shared/model'
+import {
+  PERMISSION_LABEL_KEYS,
+  REASONING_LABEL_KEYS
+} from '@common/renderer/utils/sessionOptions'
 import type { FsEntry } from '@modules/file/shared'
 
 const props = defineProps<{ streaming: boolean; disabled?: boolean }>()
@@ -36,8 +40,6 @@ const settings = useSettingsStore()
 const provider = useProviderStore()
 const inputRef = ref()
 const boxRef = ref<HTMLElement | null>(null)
-/* 新建对话草稿权限：会话创建时随会话落库，默认工作区内修改 */
-const draftPermissionMode = ref<PermissionMode>(DEFAULT_PERMISSION_MODE)
 /* 本轮关联文件：仅下一条消息生效，发送后清空 */
 const attachments = ref<FsEntry[]>([])
 /* 文件选择弹框显隐 */
@@ -93,17 +95,17 @@ defineExpose({ editText })
 /* 已存在会话时锁定为所属项目（项目不可改）；新建对话时可自由选择 */
 const locked = computed(() => Boolean(chat.currentId))
 
-/* 当前模型：已生成对话取会话配置，新建对话取默认配置 */
+/* 当前模型：已生成对话取会话配置，新建对话取上次选择 */
 const currentModelId = computed(() =>
-  locked.value ? chat.currentSession?.modelId ?? '' : settings.settings.modelId
+  locked.value ? chat.currentSession?.modelId ?? '' : settings.settings.sessionDefaults.modelId
 )
 const currentModelLabel = computed(() => currentModelId.value || t('settings.selectModel'))
 
-/* 当前供应商：已生成对话取会话配置，新建对话取默认配置 */
+/* 当前供应商：已生成对话取会话配置，新建对话取上次选择 */
 const currentProviderId = computed(() =>
   locked.value
-    ? chat.currentSession?.providerId || settings.settings.providerId
-    : settings.settings.providerId
+    ? chat.currentSession?.providerId || settings.settings.sessionDefaults.providerId
+    : settings.settings.sessionDefaults.providerId
 )
 
 /* 当前模型：结合供应商与模型 ID 定位，避免不同供应商同名模型串位 */
@@ -111,16 +113,6 @@ const currentModel = computed(() => {
   const providerItem = provider.providers.find((item) => item.id === currentProviderId.value)
   return providerItem?.models.find((item) => item.id === currentModelId.value) ?? null
 })
-
-/* 模型选择器只展示通用 / 对话模型，嵌入与文生图模型不进入会话 */
-const chatProviders = computed(() =>
-  provider.enabledProviders
-    .map((item) => ({
-      ...item,
-      models: item.models.filter((model) => isSessionModel(model))
-    }))
-    .filter((item) => item.models.length > 0)
-)
 
 /* 推理等级只对对话模型展示 */
 const showReasoning = computed(() =>
@@ -131,46 +123,25 @@ const showReasoning = computed(() =>
 const currentReasoningLevel = computed<ReasoningLevel>(() =>
   locked.value
     ? chat.currentSession?.reasoningLevel ?? DEFAULT_REASONING_LEVEL
-    : settings.settings.reasoningLevel
+    : settings.settings.sessionDefaults.reasoningLevel
 )
 
 /* 推理等级文案：中英文均展示 Default / Low / High / Max */
-const REASONING_LABEL_KEYS: Record<ReasoningLevel, string> = {
-  default: 'chat.reasoningDefault',
-  low: 'chat.reasoningLow',
-  high: 'chat.reasoningHigh',
-  max: 'chat.reasoningMax'
-}
 const currentReasoningLabel = computed(() => t(REASONING_LABEL_KEYS[currentReasoningLevel.value]))
 
-/* 当前权限模式：已生成对话取会话配置，新建对话取草稿（默认工作区内修改） */
+/* 当前权限模式：已生成对话取会话配置，新建对话取全局记忆（上次选择） */
 const currentPermissionMode = computed<PermissionMode>(() =>
   locked.value
     ? chat.currentSession?.permissionMode ?? DEFAULT_PERMISSION_MODE
-    : draftPermissionMode.value
+    : settings.settings.sessionDefaults.permissionMode
 )
-const currentPermissionLabel = computed(() => permissionLabel(currentPermissionMode.value))
+const currentPermissionLabel = computed(() => t(PERMISSION_LABEL_KEYS[currentPermissionMode.value]))
 /* 完全权限：入口文案与下拉项均用危险色提示 */
 const fullAccess = computed(() => currentPermissionMode.value === 'full-access')
 
-/* 权限模式文案 */
-function permissionLabel(permissionMode: PermissionMode): string {
-  if (permissionMode === 'read-only') {
-    return t('chat.permissionReadOnly')
-  }
-  if (permissionMode === 'full-access') {
-    return t('chat.permissionFullAccess')
-  }
-  return t('chat.permissionWorkspaceWrite')
-}
-
-/* 切换权限：已生成对话落库到会话，新建对话仅改草稿 */
+/* 切换权限：记住全局默认，已生成对话同时落库到会话 */
 async function onPermissionChange(permissionMode: PermissionMode): Promise<void> {
-  if (locked.value) {
-    await chat.updateSessionPermissionMode(permissionMode)
-  } else {
-    draftPermissionMode.value = permissionMode
-  }
+  await chat.updateSessionPermissionMode(permissionMode)
 }
 
 /* 选择模型（命令格式 providerId::modelId）：全局记忆最近选择，并同步当前会话 */
@@ -282,28 +253,30 @@ function onKeydown(event: KeyboardEvent): void {
             <Document v-else />
           </el-icon>
           <span class="composer-file-name">{{ file.name }}</span>
-          <button
-            type="button"
-            class="composer-file-remove"
-            :title="t('chat.attachRemove')"
-            @click="removeAttachment(file.path)"
-          >
-            <el-icon><Close /></el-icon>
-          </button>
+          <DeskTooltip :content="t('chat.attachRemove')" placement="top">
+            <button
+              type="button"
+              class="composer-file-remove"
+              @click="removeAttachment(file.path)"
+            >
+              <el-icon><Close /></el-icon>
+            </button>
+          </DeskTooltip>
         </span>
       </div>
       <div class="composer-bar">
         <div class="composer-left">
           <!-- 关联项目文件：弹出项目文件树，多选后随下一条消息发送 -->
-          <button
-            type="button"
-            class="attach-trigger"
-            :title="t('chat.attachFile')"
-            :disabled="disabled"
-            @click="openFilePicker"
-          >
-            <el-icon><Plus /></el-icon>
-          </button>
+          <DeskTooltip :content="t('chat.attachFile')" placement="top">
+            <button
+              type="button"
+              class="attach-trigger"
+              :disabled="disabled"
+              @click="openFilePicker"
+            >
+              <el-icon><Plus /></el-icon>
+            </button>
+          </DeskTooltip>
 
           <!-- 权限选择器：仅可查看 / 工作区内修改 / 完全权限，默认工作区内修改 -->
           <el-dropdown
@@ -366,15 +339,15 @@ function onKeydown(event: KeyboardEvent): void {
                 <el-dropdown-item command="__new_provider__">
                   + {{ t('settings.addProvider') }}
                 </el-dropdown-item>
-                <template v-for="provider in chatProviders" :key="provider.id">
+                <template v-for="item in provider.sessionProviders" :key="item.id">
                   <el-dropdown-item class="provider-group" disabled>
-                    {{ provider.name }}
+                    {{ item.name }}
                   </el-dropdown-item>
                   <el-dropdown-item
-                    v-for="model in provider.models"
-                    :key="`${provider.id}::${model.id}`"
+                    v-for="model in item.models"
+                    :key="`${item.id}::${model.id}`"
                     class="model-choice"
-                    :command="`${provider.id}::${model.id}`"
+                    :command="`${item.id}::${model.id}`"
                   >
                     {{ model.id }}
                   </el-dropdown-item>
@@ -497,17 +470,23 @@ function onKeydown(event: KeyboardEvent): void {
 /* 底部操作行：左下选择项目/模型，右下发送/停止 */
 .composer-bar {
   display: flex;
+  /* 极窄宽度下兜底换行，避免左侧选择器盖住发送按钮 */
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   min-height: 28px;
 }
 
+/* 左侧选择器只占剩余空间，空间不足时收缩（发送按钮不参与压缩） */
 .composer-left {
   display: flex;
+  /* basis 为 0：先让出空间，再按剩余宽度撑开，避免推迟发送按钮换行 */
+  flex: 1 1 0;
   align-items: center;
   gap: 2px;
   min-width: 0;
+  overflow: hidden;
 }
 
 /* 「+」关联文件按钮：与选择器触发器保持同一视觉密度 */
@@ -598,12 +577,14 @@ function onKeydown(event: KeyboardEvent): void {
   background: var(--desk-primary-soft);
 }
 
-/* 无边框选择器触发器：图标 + 文本 + 向下角标 */
+/* 无边框选择器触发器：图标 + 内容 + 向下角标 */
 .picker-trigger {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   max-width: 220px;
+  /* 允许收缩到内容宽度以下，配合 picker-name 省略号 */
+  min-width: 0;
   min-height: 28px;
   box-sizing: border-box;
   padding: 4px 8px;
@@ -636,6 +617,8 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 .picker-trigger .picker-name {
+  /* min-width: 0 是省略号生效的前提：否则 flex 项按内容撑开 */
+  min-width: 0;
   max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -644,6 +627,9 @@ function onKeydown(event: KeyboardEvent): void {
 
 :deep(.el-dropdown) {
   outline: none;
+  /* 下拉触发器作为 flex 项参与收缩，长模型名优先截断 */
+  min-width: 0;
+  flex: 0 1 auto;
 }
 
 /* 选择器下拉：当前项高亮；下拉项图标与文案留白 */

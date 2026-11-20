@@ -17,8 +17,10 @@ export const LAYOUT = {
   fileTree: { defaultWidth: 240, minWidth: 150, contentMinWidth: 150 },
   /* 笔记应用：左侧笔记树默认/最小宽度 */
   note: {
-    treeDefaultWidth: 240,
-    treeMinWidth: 150
+    treeDefaultWidth: 260,
+    treeMinWidth: 150,
+    /* 工具栏低于该宽度时把低频动作收进「更多」 */
+    toolbarCompactWidth: 880
   }
 } as const
 

@@ -63,15 +63,39 @@
   --desk-danger: var(--theme-danger);
   --desk-info: var(--theme-info);
 
+  /*
+   * Agent 操作可视化强调色：固定高饱和配色，不随主题变化。
+   * 浮层会覆盖在任意网页上，主题主色（黑白主题接近灰）不足以辨识。
+   */
+  --desk-agent-accent: #2f7bff;
+  --desk-agent-accent-2: #8b5cf6;
+  --desk-agent-accent-deep: #1b4fe0;
+  --desk-agent-contrast: #ffffff;
+  /* 浮层阴影固定为黑色，保证在任意网页背景上都可辨识 */
+  --desk-agent-shadow: rgb(0 0 0 / 42%);
+
   /* 气泡与选区 */
   --desk-bubble-user: color-mix(in srgb, var(--theme-brand) 9%, var(--theme-content));
   --desk-bubble-user-text: var(--theme-text);
   --desk-bubble-assistant: var(--theme-elevated);
-  --desk-selection: color-mix(in srgb, var(--theme-brand) 24%, transparent);
+  /*
+   * 文本选区：不跟随品牌色 —— 极简灰 / 经典灰等中性主题的品牌色为灰阶，
+   * 直接混色会得到与背景几乎同色的浅灰块，选中态难以辨认。
+   * 这里固定使用明度差明确的蓝色系，浅色主题为实色浅蓝、深色主题为实色深蓝。
+   */
+  --desk-selection: #7caff7;
+  /* 选中词的其余出现位置：更淡的提示色，避免与真正的选区混淆 */
+  --desk-selection-match: rgba(59, 130, 246, 0.13);
   --desk-code-inline-bg: color-mix(in srgb, var(--theme-text) 7%, transparent);
 
   /* 分段控件 / 按钮 / 开关 */
   --desk-segment-bg: color-mix(in srgb, var(--theme-brand) 12%, var(--theme-content));
+  /*
+   * chrome 区域（顶栏等）上的胶囊标识底：segment 以内容区白色为基色，
+   * 放到带色相的 chrome 上会浮出一块异色块；这里改用文本色极淡叠加，
+   * 与任何底色的明度关系保持一致。
+   */
+  --desk-chip-bg: color-mix(in srgb, var(--theme-text) 7%, transparent);
   --desk-segment-text: var(--theme-brand-strong);
   --desk-segment-border: color-mix(in srgb, var(--theme-brand) 22%, var(--theme-content));
   /* 主按钮：浅品牌底 + 品牌边框 + 品牌字，清晰但不抢戏 */
@@ -158,8 +182,17 @@
   /* 左侧图标栏：独立尺寸，不与顶栏高度绑定 */
   --desk-rail-width: 44px;
   --desk-sidebar-width: 240px;
-  --desk-panel-header-height: 40px;
+  --desk-note-outline-width: 240px;
+  /* 工具面板主 Tab 行与右侧目录标题栏 */
+  --desk-panel-header-height: 36px;
+  /* 工具面板所有工具条统一高度：主 Tab 行 / 工具条 / 浏览器标签栏 / 笔记工具栏共用 */
+  --desk-toolbar-height: 32px;
   --desk-scrollbar-size: 8px;
+  /* 滚动条滑块：默认与描边同色，悬停加深；编辑器与预览等主题容器可各自覆盖 */
+  --desk-scrollbar-thumb: var(--desk-border);
+  --desk-scrollbar-thumb-hover: var(--desk-text-tertiary);
+  /* 媒体预览黑底（视频 / 透明图）：固定配色，不随主题变化 */
+  --desk-media-backdrop: #000;
   /* 会话内容列：正文滚动容器两侧对称预留滚动条空间，输入框用 content-gutter 补偿后与其等宽同中心 */
   --desk-chat-width: 880px;
   --desk-chat-gutter: 32px;
@@ -167,6 +200,7 @@
   --desk-radius-sm: 10px;
   --desk-radius: 16px;
   --desk-radius-lg: 22px;
+  --desk-font-2xs: 11px;
   --desk-font-xs: 12px;
   --desk-font-sm: 13px;
   --desk-font-base: 14px;
@@ -177,6 +211,11 @@
   --desk-icon-sm: 14px;
   --desk-icon-md: 16px;
   --desk-icon-lg: 18px;
+  --desk-icon-xl: 34px;
+
+  /* 动效：折叠面板过渡（JS 兜底复位时长见 common/renderer/composables/useCollapseAnimation.ts） */
+  --desk-motion-collapse: 200ms;
+  --desk-motion-ease: ease;
 
   /* Element Plus 基础尺寸 */
   --el-font-size-extra-small: var(--desk-font-xs);
@@ -200,6 +239,9 @@
   --code-green: #7ee787;
   --code-yellow: #f2cc60;
   --code-subst: #e6edf3;
+
+  --desk-selection: #4173ad;
+  --desk-selection-match: rgba(120, 170, 255, 0.14);
 
   --desk-shadow: 0 12px 32px color-mix(in srgb, var(--theme-shadow) 55%, transparent);
   --desk-shadow-soft:

@@ -7,7 +7,7 @@
  * @author xuxueli 2026-11-08
  */
 import { computed } from 'vue'
-import { t } from '@renderer/shell/i18n'
+import { t } from '@common/renderer/i18n'
 import type { AppItem } from '@modules/appCenter/renderer/store'
 
 const props = withDefaults(
@@ -54,7 +54,9 @@ const statusActive = computed(() =>
   <div class="app-card" :class="{ 'is-building': building }">
     <div class="app-card-top">
       <div class="app-icon">
-        <el-icon><component :is="app.icon" /></el-icon>
+        <el-icon :style="app.iconScale ? { transform: `scale(${app.iconScale})` } : undefined">
+          <component :is="app.icon" />
+        </el-icon>
       </div>
       <div class="app-meta">
         <div class="app-name-row">
@@ -78,12 +80,11 @@ const statusActive = computed(() =>
 
     <div class="app-actions">
       <template v-if="mode === 'market'">
-        <el-button v-if="building" size="small" disabled>
+        <el-button v-if="building" disabled>
           {{ t('appCenter.availability.building') }}
         </el-button>
         <el-button
           v-else-if="app.installed"
-          size="small"
           type="danger"
           plain
           :loading="busy"
@@ -91,15 +92,15 @@ const statusActive = computed(() =>
         >
           {{ t('appCenter.uninstall') }}
         </el-button>
-        <el-button v-else size="small" type="primary" :loading="busy" @click="emit('install')">
+        <el-button v-else type="primary" :loading="busy" @click="emit('install')">
           {{ t('appCenter.install') }}
         </el-button>
       </template>
       <template v-else>
-        <el-button size="small" @click="emit('settings')">
+        <el-button @click="emit('settings')">
           {{ t('appCenter.settings') }}
         </el-button>
-        <el-button size="small" type="primary" :disabled="!app.enabled" @click="emit('open')">
+        <el-button type="primary" :disabled="!app.enabled" @click="emit('open')">
           {{ t('appCenter.open') }}
         </el-button>
       </template>
@@ -180,7 +181,7 @@ const statusActive = computed(() =>
   border: 1px solid var(--desk-border);
   border-radius: 5px;
   color: var(--desk-text-tertiary);
-  font-size: 11px;
+  font-size: var(--desk-font-2xs);
   line-height: 16px;
 }
 

@@ -6,7 +6,8 @@
  */
 import { useRoute } from 'vue-router'
 import { useSettingsStore } from '@modules/settings/renderer'
-import { t } from '@renderer/shell/i18n'
+import { t } from '@common/renderer/i18n'
+import { PageHeading } from '@common/renderer/components'
 import GeneralSettings from '@modules/settings/renderer/components/GeneralSettings.vue'
 import DataDirSettings from '@modules/settings/renderer/components/DataDirSettings.vue'
 import CommandRuntimeSettings from '@modules/settings/renderer/components/CommandRuntimeSettings.vue'
@@ -31,26 +32,59 @@ if (typeof route.query.tab === 'string' && route.query.tab) {
       <div class="settings-inner">
         <el-tabs v-model="settings.activeTab" class="settings-tabs">
           <el-tab-pane :label="t('settings.general')" name="general">
-            <GeneralSettings />
-          </el-tab-pane>
-          <el-tab-pane :label="t('settings.personalization')" name="personalization">
-            <PersonalizationSettings />
-          </el-tab-pane>
-          <el-tab-pane :label="t('settings.providers')" name="providers">
-            <ProviderSettings />
-          </el-tab-pane>
-          <el-tab-pane :label="t('settings.runtimeTab')" name="runtime">
-            <div class="settings-pane">
-              <DataDirSettings />
-              <CommandRuntimeSettings />
-              <DeveloperSettings />
+            <div class="settings-pane settings-pane-narrow">
+              <PageHeading
+                :title="t('settings.general')"
+                :description="t('settings.pageTip.general')"
+                :inset="false"
+              />
+              <div class="settings-tab-body"><GeneralSettings /></div>
             </div>
           </el-tab-pane>
+          <el-tab-pane :label="t('settings.personalization')" name="personalization">
+            <div class="settings-pane settings-pane-narrow">
+              <PageHeading
+                :title="t('settings.personalization')"
+                :description="t('settings.pageTip.personalization')"
+                :inset="false"
+              />
+              <div class="settings-tab-body"><PersonalizationSettings /></div>
+            </div>
+          </el-tab-pane>
+          <el-tab-pane :label="t('settings.providers')" name="providers">
+            <PageHeading
+              :title="t('settings.providers')"
+              :description="t('settings.providerTip')"
+              :inset="false"
+            />
+            <div class="settings-tab-body"><ProviderSettings /></div>
+          </el-tab-pane>
           <el-tab-pane :label="t('settings.projects')" name="projects">
-            <ProjectSettings />
+            <PageHeading
+              :title="t('settings.projects')"
+              :description="t('project.settingsTip')"
+              :inset="false"
+            />
+            <div class="settings-tab-body"><ProjectSettings /></div>
+          </el-tab-pane>
+          <el-tab-pane :label="t('settings.runtimeTab')" name="runtime">
+            <div class="settings-pane settings-pane-narrow">
+              <PageHeading
+                :title="t('settings.runtimeTab')"
+                :description="t('settings.pageTip.runtime')"
+                :inset="false"
+              />
+              <div class="settings-tab-body">
+                <DataDirSettings class="settings-first" />
+                <CommandRuntimeSettings />
+                <DeveloperSettings />
+              </div>
+            </div>
           </el-tab-pane>
           <el-tab-pane :label="t('settings.about')" name="about">
-            <AboutSettings />
+            <div class="settings-pane settings-pane-half settings-about-pane">
+              <AboutSettings />
+            </div>
           </el-tab-pane>
         </el-tabs>
       </div>
@@ -65,13 +99,13 @@ if (typeof route.query.tab === 'string' && route.query.tab) {
   height: 100%;
   /* 字号与左侧菜单保持一致（14px），统一按钮与主要文案 */
   font-size: var(--desk-font-base);
-  --el-font-size-base: 14px;
+  --el-font-size-base: var(--desk-font-base);
 }
 
-/* 供应商弹窗（可能被 teleport 到 body，用 :global 命中），字号与左侧菜单一致 */
-:global(.settings-dialog) {
+/* 供应商编辑抽屉（可能被 teleport 到 body，用 :global 命中），字号与左侧菜单一致 */
+:global(.settings-drawer) {
   font-size: var(--desk-font-base);
-  --el-font-size-base: 14px;
+  --el-font-size-base: var(--desk-font-base);
 }
 
 .settings-body {
@@ -88,16 +122,47 @@ if (typeof route.query.tab === 'string' && route.query.tab) {
   overflow: visible;
 }
 
+/* 正文与扩展中心一致：占满内容区，仅保留左右内边距 */
 .settings-inner {
-  max-width: 940px;
-  margin: 0 auto;
-  padding: 28px 32px 48px;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0 28px 48px;
 }
 
-/* 独立子菜单首个分区不重复画顶部分隔线 */
-.settings-pane > :first-child {
+/* 关于我们无标题区，单独保留顶部留白 */
+.settings-about-pane {
+  padding-top: 16px;
+}
+
+/* 标题区分隔线与正文之间的间距：与任务列表正文保持一致 */
+.settings-tab-body {
+  padding-top: 16px;
+}
+
+/* 运行设置首个区块不再重复绘制顶部分割线 */
+.settings-tab-body :deep(.settings-first) {
   margin-top: 0;
   padding-top: 0;
   border-top: none;
 }
+
+/* 保证百分比宽度基于完整正文区域计算 */
+.settings-tabs,
+.settings-tabs :deep(.el-tabs__content),
+.settings-tabs :deep(.el-tab-pane) {
+  width: 100%;
+}
+
+/* 常规 / 个性化 / 运行设置：与会话正文最大宽度一致，靠左对齐 */
+.settings-pane-narrow {
+  width: 100%;
+  max-width: var(--desk-chat-width);
+}
+
+/* 关于我们：软件窗口宽度的 50%，水平居中，窗口较窄时不超过正文区 */
+.settings-pane-half {
+  width: min(50vw, 100%);
+  margin: 0 auto;
+}
+
 </style>

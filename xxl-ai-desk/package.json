@@ -1,6 +1,6 @@
 {
   "name": "xxl-ai-desk",
-  "version": "1.5.0-SNAPSHOT",
+  "version": "1.6.1-SNAPSHOT",
   "private": true,
   "description": "XXL-AI-Desk | AI Agent 桌面客户端",
   "homepage": "https://github.com/xuxueli/xxl-ai",
@@ -33,6 +33,7 @@
     "cheerio": "1.2.0",
     "drizzle-orm": "0.45.4",
     "electron-log": "5.4.4",
+    "mermaid": "12.3.0",
     "node-pty": "1.1.0",
     "tar": "7.5.22",
     "yaml": "2.9.1"

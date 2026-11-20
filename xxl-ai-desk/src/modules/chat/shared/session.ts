@@ -3,30 +3,25 @@
  */
 
 import type { ContextBreakdown, ReasoningLevel } from '@common/shared/model'
+import type { PermissionMode } from '@common/shared/permission'
 import type { MessageSource } from './messageSource'
 import type { MessageStatus } from './messageStatus'
 
-/*
- * 权限模式（随会话持久化，默认工作区内修改）：
- *   - read-only       仅可查看：全局可读，不可写入、不可执行命令；
- *   - workspace-write 工作区内修改：全局可读，仅项目目录与系统临时目录可写；
- *   - full-access     完全权限：全局读写，敏感操作仍由统一拦截机制兜底。
- */
-export type PermissionMode = 'read-only' | 'workspace-write' | 'full-access'
-
-/* 新建会话的默认权限 */
-export const DEFAULT_PERMISSION_MODE: PermissionMode = 'workspace-write'
-
-/* 权限模式归一：非法值回退默认权限 */
-export function normalizePermissionMode(value: unknown): PermissionMode {
-  if (value === 'read-only' || value === 'full-access') {
-    return value
-  }
-  return DEFAULT_PERMISSION_MODE
-}
+/* 权限模式等跨域契约由 common/shared 统一提供，这里保持本域原有出口 */
+export { DEFAULT_PERMISSION_MODE, normalizePermissionMode } from '@common/shared/permission'
+export type { PermissionMode } from '@common/shared/permission'
 
 /* 会话摘要固定长度上限（字符） */
 export const SESSION_SUMMARY_MAX_CHARS = 2000
+
+/* 会话触发来源：用户手动对话 / 定时任务调度 */
+export const SESSION_TRIGGER_TYPES = ['manual', 'schedule'] as const
+export type SessionTriggerType = (typeof SESSION_TRIGGER_TYPES)[number]
+
+/* 触发来源归一：非法值一律回退用户手动，避免历史脏数据影响侧栏标记 */
+export function normalizeSessionTriggerType(value: unknown): SessionTriggerType {
+  return value === 'schedule' ? 'schedule' : 'manual'
+}
 
 /* 会话（归属某项目，并绑定一个 Agent） */
 export interface SessionDTO {
@@ -46,6 +41,10 @@ export interface SessionDTO {
   reasoningLevel: ReasoningLevel
   /* 权限模式（仅可查看 / 工作区内修改 / 完全权限） */
   permissionMode: PermissionMode
+  /* 触发来源：用户手动对话 / 定时任务调度 */
+  triggerType: SessionTriggerType
+  /* 定时任务触发时的来源任务 ID（0 表示非定时任务会话） */
+  scheduleTaskId: number
   /* 最近一次模型响应的上下文分项估算（旧会话为 null） */
   contextBreakdown: ContextBreakdown | null
   /* 创建时间（ISO） */

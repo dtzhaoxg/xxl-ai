@@ -8,9 +8,10 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from '@common/renderer/api'
 import { GitIcon } from '@common/renderer/components/icons'
+import { DeskTooltip } from '@common/renderer/components'
 import { ipcErrorMessage } from '@common/renderer/utils/ipcError'
 import { normalizePath, parentDir } from '@modules/file/renderer'
-import { t } from '@renderer/shell/i18n'
+import { t } from '@common/renderer/i18n'
 import GitChangeTree from '@modules/git/renderer/components/git/GitChangeTree.vue'
 import GitDiffPanel from '@modules/git/renderer/components/git/GitDiffPanel.vue'
 import GitCommitBox from '@modules/git/renderer/components/git/GitCommitBox.vue'
@@ -273,20 +274,24 @@ function openProjectFolder(): void {
 
     <template v-else-if="status">
       <!-- 分支与打开项目文件夹 -->
-      <div class="git-summary">
-        <div class="git-branch" :title="status.upstream || status.branch">
+      <div class="desk-toolbar">
+        <div class="git-branch desk-toolbar-main" :title="status.upstream || status.branch">
           <GitIcon class="git-branch-icon" />
           <span class="git-branch-name">{{ status.branch || t('git.detached') }}</span>
           <span v-if="status.ahead" class="git-track">↑{{ status.ahead }}</span>
           <span v-if="status.behind" class="git-track">↓{{ status.behind }}</span>
         </div>
-        <button
-          class="panel-btn"
-          :title="t('panel.openProjectFolder')"
-          @click="openProjectFolder"
-        >
-          <el-icon><FolderOpened /></el-icon>
-        </button>
+        <div class="desk-toolbar-actions">
+          <DeskTooltip :content="t('panel.openProjectFolder')">
+            <button
+              class="desk-toolbar-btn"
+              :aria-label="t('panel.openProjectFolder')"
+              @click="openProjectFolder"
+            >
+              <el-icon><FolderOpened /></el-icon>
+            </button>
+          </DeskTooltip>
+        </div>
       </div>
 
       <!-- 左：变更树；右：差异 -->
@@ -348,17 +353,6 @@ function openProjectFolder(): void {
 }
 
 /* 分支栏 */
-.git-summary {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  height: var(--desk-panel-header-height);
-  padding: 0 8px 0 14px;
-  border-bottom: 1px solid var(--desk-border);
-}
-
 .git-branch {
   display: flex;
   align-items: center;

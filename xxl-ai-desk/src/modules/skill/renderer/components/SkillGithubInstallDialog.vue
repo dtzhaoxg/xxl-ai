@@ -10,7 +10,7 @@ import { ElMessage } from 'element-plus'
 import { api } from '@common/renderer/api'
 import { useSkillStore } from '@modules/skill/renderer'
 import { ipcErrorMessage } from '@common/renderer/utils/ipcError'
-import { t } from '@renderer/shell/i18n'
+import { t } from '@common/renderer/i18n'
 import type { GithubSkillCandidate } from '@modules/skill/shared'
 
 const visible = defineModel<boolean>('visible', { default: false })
@@ -248,7 +248,7 @@ watch(visible, (open) => {
 
 .github-path {
   font-family: var(--el-font-family-mono, monospace);
-  font-size: 12px;
+  font-size: var(--desk-font-xs);
   color: var(--desk-text-secondary);
 }
 

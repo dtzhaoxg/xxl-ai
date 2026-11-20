@@ -13,9 +13,11 @@ import { sessionKeyOf, useToolPanelStore } from '@modules/toolPanel/renderer'
 import { useBrowserSessionStore } from '@modules/browser/renderer'
 import { sectionOfPath } from '@renderer/shell/config/nav'
 import {
+  cancelBrowserActions,
   executeBrowserAction,
   openBrowserRequest
 } from '@modules/browser/renderer'
+import { BrowserAgentOverlay } from '@modules/browser/renderer'
 import {
   pinWarmSession,
   setSessionHost,
@@ -91,9 +93,10 @@ function bindHost(sessionId: string, el: Element | ComponentPublicInstance | nul
 /* 事件解绑 */
 let offOpenTab: (() => void) | null = null
 let offActionRequest: (() => void) | null = null
+let offActionCancel: (() => void) | null = null
 
 onMounted(() => {
-  /* 页面 window.open / Agent open_browser：写入对应会话；仅会话首次打开网页时自动展开浏览器工具 */
+  /* 页面 window.open：写入对应会话；仅会话首次打开网页时自动展开浏览器工具（Agent 导航走动作桥） */
   offOpenTab = api.browser.onOpenTab((request) => {
     const target = request.sessionId || currentKey.value
     const sessionState = browser.sessions[target]
@@ -108,9 +111,20 @@ onMounted(() => {
   /* Agent 页面动作：按会话路由，后台会话静默执行，不切换视图 */
   offActionRequest = api.browser.onActionRequest((request) => {
     const target = request.sessionId || currentKey.value
+    /* 首次导航若浏览器工具未展开，自动展开，便于实时观察 Agent 操作 */
+    if (request.action.type === 'navigate' && target === currentKey.value) {
+      const panel = toolPanel.sliceOf(target).panel
+      if (!panel.visible || panel.activeTab !== 'browser') {
+        toolPanel.openTab(target, 'browser')
+      }
+    }
     void executeBrowserAction(target, request.action).then((result) =>
       api.browser.respondAction(request.requestId, result)
     )
+  })
+  /* 会话终止：主进程通知取消该会话当前与排队的页面动作 */
+  offActionCancel = api.browser.onActionCancel((request) => {
+    cancelBrowserActions(request.sessionId || currentKey.value)
   })
 })
 
@@ -119,6 +133,8 @@ onBeforeUnmount(() => {
   offOpenTab = null
   offActionRequest?.()
   offActionRequest = null
+  offActionCancel?.()
+  offActionCancel = null
 })
 </script>
 
@@ -134,6 +150,11 @@ onBeforeUnmount(() => {
     >
       <!-- 加载进度条：与面板内的条保持一致，覆盖在 webview 之上 -->
       <div v-if="sessionId === currentKey && activeLoading" class="host-load-bar"><span></span></div>
+      <!-- Agent 动作可视化：光标、目标轮廓与动作条（仅当前会话可见时展示） -->
+      <BrowserAgentOverlay
+        v-if="sessionId === currentKey && activeVisible && activeHasPage"
+        :session-id="sessionId"
+      />
     </div>
   </div>
 </template>

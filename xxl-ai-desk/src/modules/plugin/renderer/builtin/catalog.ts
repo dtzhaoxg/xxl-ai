@@ -149,6 +149,13 @@ export const BUILTIN_TOOL_CATALOG: BuiltinToolCatalogItem[] = [
     readOnly: true
   },
   {
+    name: 'move_browser',
+    category: 'browser',
+    titleKey: 'chat.tool.moveBrowser',
+    descriptionKey: 'plugin.builtinTool.desc.moveBrowser',
+    readOnly: true
+  },
+  {
     name: 'click_browser',
     category: 'browser',
     titleKey: 'chat.tool.clickBrowser',
@@ -163,24 +170,17 @@ export const BUILTIN_TOOL_CATALOG: BuiltinToolCatalogItem[] = [
     readOnly: false
   },
   {
-    name: 'hover_browser',
+    name: 'type_browser',
     category: 'browser',
-    titleKey: 'chat.tool.hoverBrowser',
-    descriptionKey: 'plugin.builtinTool.desc.hoverBrowser',
-    readOnly: true
+    titleKey: 'chat.tool.typeBrowser',
+    descriptionKey: 'plugin.builtinTool.desc.typeBrowser',
+    readOnly: false
   },
   {
     name: 'press_browser',
     category: 'browser',
     titleKey: 'chat.tool.pressBrowser',
     descriptionKey: 'plugin.builtinTool.desc.pressBrowser',
-    readOnly: false
-  },
-  {
-    name: 'select_browser',
-    category: 'browser',
-    titleKey: 'chat.tool.selectBrowser',
-    descriptionKey: 'plugin.builtinTool.desc.selectBrowser',
     readOnly: false
   },
   {

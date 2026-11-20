@@ -12,7 +12,7 @@ import {
   type BuiltinToolCategoryKey
 } from '@modules/plugin/renderer/builtin/catalog'
 import PluginCenterShell from '@modules/plugin/renderer/components/PluginCenterShell.vue'
-import { t } from '@renderer/shell/i18n'
+import { t } from '@common/renderer/i18n'
 
 /* 分类 + 其下工具（顺序取自共享目录） */
 const groups = computed(() =>
@@ -39,11 +39,10 @@ function toggleGroup(key: BuiltinToolCategoryKey): void {
 </script>
 
 <template>
-  <PluginCenterShell>
-    <template #header>
-      <div class="page-tip">{{ t('plugin.builtinTool.intro') }}</div>
-    </template>
-
+  <PluginCenterShell
+    :title="t('plugin.builtin')"
+    :description="t('plugin.builtinTool.intro')"
+  >
     <div class="builtin-body">
       <section v-for="group in groups" :key="group.key" class="tool-group">
         <div class="group-head" @click="toggleGroup(group.key)">
@@ -88,19 +87,11 @@ function toggleGroup(key: BuiltinToolCategoryKey): void {
 </template>
 
 <style scoped lang="scss">
-/* 说明区：位于中心外壳 header 内 */
-.page-tip {
-  padding-bottom: 16px;
-  font-size: var(--desk-font-xs);
-  color: var(--desk-text-tertiary);
-  line-height: 1.6;
-}
-
 /* 正文：在外壳滚动区内补充左右与底部间距 */
 .builtin-body {
   padding: 0 28px 32px;
   font-size: var(--desk-font-base);
-  --el-font-size-base: 14px;
+  --el-font-size-base: var(--desk-font-base);
 }
 
 .tool-group {

@@ -6,7 +6,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useSettingsStore } from '@modules/settings/renderer'
-import { t } from '@renderer/shell/i18n'
+import { t } from '@common/renderer/i18n'
 import type { AppSettings } from '@modules/settings/shared'
 import type { RuntimeDetectResult } from '@modules/platform/shared'
 
@@ -72,6 +72,8 @@ function syncRuntime(): void {
 }
 
 watch(() => settings.loaded, syncRuntime)
+/* 切换设置子菜单时丢弃未保存的编辑，回到已保存的运行时配置 */
+watch(() => settings.activeTab, syncRuntime)
 onMounted(syncRuntime)
 
 /* 修改 Node 来源 / 路径后，清空旧的检测结果，避免展示过期状态 */
@@ -170,12 +172,14 @@ function showDetectResult(result: RuntimeDetectResult): void {
       </div>
       <div v-if="nodeMode === 'custom'" class="runtime-field">
         <span class="runtime-field-label">{{ t('settings.runtimePath') }}</span>
-        <el-input
-          v-model="nodePathInput"
-          class="runtime-input"
-          :placeholder="t('settings.nodePathPlaceholder')"
-        />
-        <el-button @click="browseNodePath">{{ t('settings.browse') }}</el-button>
+        <div class="runtime-path">
+          <el-input
+            v-model="nodePathInput"
+            class="runtime-input"
+            :placeholder="t('settings.nodePathPlaceholder')"
+          />
+          <el-button @click="browseNodePath">{{ t('settings.browse') }}</el-button>
+        </div>
       </div>
       <div class="runtime-field">
         <span class="runtime-field-label">{{ t('settings.runtimeCheck') }}</span>
@@ -191,12 +195,14 @@ function showDetectResult(result: RuntimeDetectResult): void {
       <div class="runtime-group-title">Python</div>
       <div class="runtime-field">
         <span class="runtime-field-label">{{ t('settings.runtimePath') }}</span>
-        <el-input
-          v-model="pythonPathInput"
-          class="runtime-input"
-          :placeholder="t('settings.pythonPathPlaceholder')"
-        />
-        <el-button @click="browsePythonPath">{{ t('settings.browse') }}</el-button>
+        <div class="runtime-path">
+          <el-input
+            v-model="pythonPathInput"
+            class="runtime-input"
+            :placeholder="t('settings.pythonPathPlaceholder')"
+          />
+          <el-button @click="browsePythonPath">{{ t('settings.browse') }}</el-button>
+        </div>
       </div>
       <div class="runtime-field">
         <span class="runtime-field-label">{{ t('settings.runtimeCheck') }}</span>
@@ -217,7 +223,7 @@ function showDetectResult(result: RuntimeDetectResult): void {
 </template>
 
 <style scoped lang="scss">
-@use '../../../../common/renderer/styles/settingsBlock.scss';
+@use '@common/renderer/styles/settingsBlock.scss';
 
 /* 命令运行环境（Node / Python 路径） */
 .runtime {
@@ -231,9 +237,8 @@ function showDetectResult(result: RuntimeDetectResult): void {
   margin-bottom: 16px;
 }
 
-/* 每个运行时一个分组卡片，字段标签左对齐、状态独立展示 */
+/* 每个运行时一个分组卡片，字段标签左对齐、状态独立展示；卡片撑满内容区 */
 .runtime-group {
-  max-width: 640px;
   padding: 14px 16px;
   margin-bottom: 12px;
   border: 1px solid var(--desk-border);
@@ -261,16 +266,26 @@ function showDetectResult(result: RuntimeDetectResult): void {
 
 .runtime-field-label {
   flex-shrink: 0;
-  width: 40px;
+  width: 56px;
   font-size: var(--desk-font-sm);
   color: var(--desk-text-secondary);
+  white-space: nowrap;
+}
+
+/* 路径输入 + 浏览按钮：随卡片宽度伸缩 */
+.runtime-path {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  gap: 8px;
 }
 
 .runtime-input {
   flex: 1;
+  min-width: 0;
 }
 
-/* 检测状态：常态弱化、成功绿色、失败红色 */
+/* 检测状态：常态弱化、成功绿色、失败红色；长路径允许换行 */
 .runtime-status {
   flex: 1;
   min-width: 0;
@@ -291,7 +306,6 @@ function showDetectResult(result: RuntimeDetectResult): void {
   display: flex;
   align-items: center;
   gap: 12px;
-  max-width: 640px;
   margin-top: 4px;
 }
 

@@ -4,7 +4,7 @@
 */
 
 /* 一级板块标识 */
-export type SectionKey = 'home' | 'plugin' | 'apps' | 'settings'
+export type SectionKey = 'home' | 'schedule' | 'plugin' | 'apps' | 'settings'
 
 /* 子菜单项公共字段 */
 interface NavItemBase {
@@ -31,6 +31,16 @@ export interface NavSection {
 
 /* 应用中心 / 扩展中心 / 系统设置 三个板块的子菜单 */
 export const NAV_SECTIONS: Record<Exclude<SectionKey, 'home'>, NavSection> = {
+  schedule: {
+    key: 'schedule',
+    titleKey: 'schedule.title',
+    entryPath: '/schedule/tasks',
+    items: [
+      { key: 'tasks', labelKey: 'schedule.nav.tasks', icon: 'AlarmClock', path: '/schedule/tasks' },
+      { key: 'logs', labelKey: 'schedule.nav.logs', icon: 'Clock', path: '/schedule/logs' },
+      { key: 'dispatch', labelKey: 'schedule.nav.dispatch', icon: 'Setting', path: '/schedule/dispatch' }
+    ]
+  },
   apps: {
     key: 'apps',
     titleKey: 'appCenter.title',
@@ -57,8 +67,8 @@ export const NAV_SECTIONS: Record<Exclude<SectionKey, 'home'>, NavSection> = {
     entryPath: '/settings',
     items: [
       { key: 'providers', labelKey: 'settings.providers', icon: 'Cpu', tab: 'providers' },
-      { key: 'runtime', labelKey: 'settings.runtimeTab', icon: 'Monitor', tab: 'runtime' },
       { key: 'projects', labelKey: 'settings.projects', icon: 'Folder', tab: 'projects' },
+      { key: 'runtime', labelKey: 'settings.runtimeTab', icon: 'Monitor', tab: 'runtime' },
       { key: 'general', labelKey: 'settings.general', icon: 'Setting', tab: 'general', divider: true },
       {
         key: 'personalization',
@@ -74,6 +84,7 @@ export const NAV_SECTIONS: Record<Exclude<SectionKey, 'home'>, NavSection> = {
 /* 各板块入口路径（图标栏切换用） */
 export const SECTION_ENTRY: Record<SectionKey, string> = {
   home: '/',
+  schedule: NAV_SECTIONS.schedule.entryPath,
   plugin: NAV_SECTIONS.plugin.entryPath,
   apps: NAV_SECTIONS.apps.entryPath,
   settings: NAV_SECTIONS.settings.entryPath
@@ -82,6 +93,7 @@ export const SECTION_ENTRY: Record<SectionKey, string> = {
 /* 各板块图标（全局注册的图标组件名）：图标栏与顶栏标题共用同一来源 */
 export const SECTION_ICON: Record<SectionKey, string> = {
   home: 'ChatDotRound',
+  schedule: 'AlarmClock',
   plugin: 'SetUp',
   apps: 'ShoppingTrolley',
   settings: 'Setting'
@@ -89,6 +101,9 @@ export const SECTION_ICON: Record<SectionKey, string> = {
 
 /* 由路由路径解析所属一级板块 */
 export function sectionOfPath(path: string): SectionKey {
+  if (path.startsWith('/schedule')) {
+    return 'schedule'
+  }
   if (path.startsWith('/plugin')) {
     return 'plugin'
   }

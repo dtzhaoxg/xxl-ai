@@ -1,141 +1,81 @@
 /* XXL-AI-Desk 主进程入口：窗口、生命周期、IPC 装配 */
 
-import { app, BrowserWindow, nativeImage, shell } from 'electron'
-import { existsSync } from 'fs'
-import { join } from 'path'
+import { app, BrowserWindow } from 'electron'
+import { mkdirSync } from 'fs'
 import './i18n'
 import { BROWSER_IPC } from '@modules/browser/shared'
-import { APP_NAME } from '@common/shared/appInfo'
+import { getCacheDir, getDataDir } from '@common/main/config/paths'
 import { initDatabaseFromModules } from '@main/db'
+import type { DatabaseInitResult } from '@common/main/db'
 import { setMainLanguage } from '@common/main/i18n'
-import { getSettings } from '@modules/settings/main'
+import { getBrandingAssets, getSettings } from '@modules/settings/main'
 import { purgeExpiredTraces } from '@modules/diagnostics/main'
 import { registerIpc } from '@main/ipc'
 import { cleanupGithubArchiveTemps } from '@modules/skill/main'
 import { ensureSeedProviders } from '@modules/provider/main'
-import { registerLocalFileProtocol } from '@modules/platform/main'
+import {
+  applyAppIcon,
+  registerLocalFileProtocol,
+  showDatabaseRecoveryNotice,
+  showStartupFailure
+} from '@modules/platform/main'
 import { disposeAllTerminals } from '@modules/terminal/main'
 import { disposeAllFsWatch } from '@modules/file/main'
 import { disposeAllNoteWatch } from '@modules/apps/note/main'
 import { disposeAllGitWatch } from '@modules/git/main'
 import { disposeAgentRuntime } from '@modules/agent/main'
-import { disposeBrowserActions } from '@modules/browser/main'
+import { disposeScheduleScheduler, startScheduleScheduler } from '@modules/schedule/main'
+import { bindBrowserShortcut } from '@modules/browser/main'
 import { initLogger } from '@common/main/utils/logger'
+import { createMainWindow } from '@main/window'
+
+/* 业务数据目录：默认系统配置目录，可由 xxl-ai-desk-config.json 切换；必须在 app ready 前设置 */
+const dataDir = getDataDir()
+mkdirSync(dataDir, { recursive: true, mode: 0o700 })
+
+/* 系统缓存目录：Chromium 缓存与本地存储独立存放，避免污染业务数据目录 */
+const cacheDir = getCacheDir()
+mkdirSync(cacheDir, { recursive: true, mode: 0o700 })
+app.setPath('userData', cacheDir)
+app.setPath('sessionData', cacheDir)
 
 /* 主窗口引用（未创建或已关闭时为 null） */
 let mainWindow: BrowserWindow | null = null
 
-/* 运行期应用图标路径：开发期取项目 resources/icon.png；打包后取 resources/icon.png（由 electron-builder extraResources 注入） */
-function resolveAppIconPath(): string | null {
-  const iconPath = app.isPackaged
-    ? join(process.resourcesPath, 'icon.png')
-    : join(app.getAppPath(), 'resources', 'icon.png')
-  return existsSync(iconPath) ? iconPath : null
-}
-
-/* 创建主窗口 */
+/* 创建主窗口：窗口内部逻辑在 window.ts，这里只维护引用与应用级图标 */
 function createWindow(): void {
-  /* macOS：隐藏标题栏但保留系统红黄绿按钮，内容铺满整个窗口；其它平台沿用系统默认边框 */
-  const isMac = process.platform === 'darwin'
-  const appIconPath = resolveAppIconPath()
-  mainWindow = new BrowserWindow({
-    width: 1512,
-    height: 944,
-    minWidth: 900,
-    minHeight: 720,
-    show: false,
-    autoHideMenuBar: true,
-    title: APP_NAME,
-    backgroundColor: '#ffffff',
-    ...(isMac
-      ? {
-          titleBarStyle: 'hidden' as const,
-          /* 红黄绿窗口按钮垂直居中于顶部栏（38px），水平位置与左内边距对齐 */
-          trafficLightPosition: { x: 14, y: 13 }
-        }
-      : appIconPath
-        ? { icon: appIconPath }
-        : {}),
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      sandbox: false,
-      contextIsolation: true,
-      nodeIntegration: false,
-      /* 右侧「浏览器」面板使用 <webview> 内嵌网页 */
-      webviewTag: true
-    }
-  })
-
-  mainWindow.on('ready-to-show', () => {
-    mainWindow?.show()
-  })
-
-  /* macOS：dev 期运行原装 Electron，Dock 图标仍为 Electron 默认，需显式覆盖（打包后 bundle 已是自定义 icns，属冗余设置） */
-  if (isMac && appIconPath) {
-    app.dock?.setIcon(nativeImage.createFromPath(appIconPath))
-  }
-
-  /* 窗口关闭：解除引用并结算未完成的浏览器读取，避免等待超时 */
+  mainWindow = createMainWindow()
+  /* 运行期应用图标：自定义 Logo 优先，未设置时回退内置 icon.png */
+  applyAppIcon(getBrandingAssets().logoPath)
   mainWindow.on('closed', () => {
-    disposeBrowserActions()
     mainWindow = null
   })
-
-  /* 渲染进程崩溃/重载：回收残留 PTY，避免进程泄漏 */
-  mainWindow.webContents.on('render-process-gone', () => {
-    disposeAllTerminals()
-  })
-
-  /* 外链使用系统浏览器打开 */
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
-    return { action: 'deny' }
-  })
-
-  /*
-   * 拦截主窗口内导航：Markdown / 页面内的普通链接不得替换应用界面。
-   * 同文档（仅 hash 变化）放行；其余 http(s) 交给系统浏览器。
-   */
-  const guardNavigation = (event: Electron.Event, url: string): void => {
-    const current = mainWindow?.webContents.getURL() ?? ''
-    if (url.split('#')[0] === current.split('#')[0]) {
-      return
-    }
-    event.preventDefault()
-    if (/^https?:/i.test(url)) {
-      void shell.openExternal(url)
-    }
-  }
-  mainWindow.webContents.on('will-navigate', guardNavigation)
-  mainWindow.webContents.on('will-redirect', guardNavigation)
-
-  if (process.env.ELECTRON_RENDERER_URL) {
-    mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
-  } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
-  }
 }
 
-/* 单实例锁：避免多开导致数据库竞争 */
-const gotLock = app.requestSingleInstanceLock()
-if (!gotLock) {
-  app.quit()
-} else {
-  app.on('second-instance', () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) {
-        mainWindow.restore()
-      }
-      mainWindow.focus()
-    }
-  })
+/*
+ * 启动引导：数据库初始化与后续装配分开处理。
+ *   - 旧库升级不兼容：初始化已自动备份并重建，这里弹框说明原因与备份位置；
+ *   - 其它启动异常：统一弹框提示并退出，避免界面白屏且错误不可见。
+ */
+async function bootstrap(): Promise<void> {
+  initLogger()
 
-  /* 应用就绪：初始化数据库、播种供应商、注册 IPC、建立窗口 */
-  app.whenReady().then(() => {
-    initLogger()
-    initDatabaseFromModules()
+  let database: DatabaseInitResult
+  try {
+    database = initDatabaseFromModules()
+  } catch (error) {
+    await showStartupFailure(error)
+    app.exit(1)
+    return
+  }
+
+  try {
     /* 主进程错误文案语言：语言由配置决定且不支持运行时切换，启动时初始化一次 */
     setMainLanguage(getSettings().language)
+    /* 旧库已备份重建：先告知用户原因与备份文件，再进入应用 */
+    if (database.recovered) {
+      await showDatabaseRecoveryNotice(database)
+    }
     /* 清理过期模型通讯记录（开发者模式） */
     purgeExpiredTraces()
     cleanupGithubArchiveTemps()
@@ -158,10 +98,14 @@ if (!gotLock) {
           })
           return { action: 'deny' }
         })
+        /* webview 内按键不冒泡到渲染窗口：guest 的快捷键同样在主进程拦截 */
+        bindBrowserShortcut(contents)
       }
     })
 
     createWindow()
+    /* 窗口就绪后再启动调度：到点触发的会话事件有渲染层可接 */
+    startScheduleScheduler()
 
     /* macOS 点击 Dock 图标且无窗口时重新建窗 */
     app.on('activate', () => {
@@ -169,6 +113,29 @@ if (!gotLock) {
         createWindow()
       }
     })
+  } catch (error) {
+    await showStartupFailure(error)
+    app.exit(1)
+  }
+}
+
+/* 单实例锁：避免多开导致数据库竞争 */
+const gotLock = app.requestSingleInstanceLock()
+if (!gotLock) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) {
+        mainWindow.restore()
+      }
+      mainWindow.focus()
+    }
+  })
+
+  /* 应用就绪：初始化数据库、播种供应商、注册 IPC、建立窗口 */
+  app.whenReady().then(() => {
+    void bootstrap()
   })
 
   /*
@@ -189,6 +156,8 @@ if (!gotLock) {
     /* 先阻塞退出，等待运行时进程优雅关闭后再统一清理并真正退出 */
     event.preventDefault()
     quitting = true
+    /* 先停调度，避免退出过程中再触发新任务，再回收运行时与终端 */
+    disposeScheduleScheduler()
     void disposeAgentRuntime().finally(() => {
       disposeAllTerminals()
       disposeAllFsWatch()

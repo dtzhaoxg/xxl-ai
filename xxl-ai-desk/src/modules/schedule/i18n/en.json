@@ -1,0 +1,209 @@
+{
+  "schedule": {
+    "title": "Scheduled tasks",
+    "nav": {
+      "tasks": "Task list",
+      "logs": "Run log",
+      "dispatch": "Dispatch settings"
+    },
+    "tip": {
+      "tasks": "Sessions are triggered by schedule rules. Use \"Run log\" in a row to view its trigger history.",
+      "logs": "Review every trigger (including failed skips); open a session for details.",
+      "dispatch": "Configure the dispatch policy: sleep behavior, maximum concurrent tasks and the task watchdog interval."
+    },
+    "sessionBadge": "Scheduled task session",
+    "new": "New scheduled task",
+    "editTitle": "Edit scheduled task",
+    "empty": "No scheduled tasks",
+    "emptyTip": "Once created, sessions are triggered by the schedule rule; results are available in the session and run log.",
+    "searchPlaceholder": "Search task name or prompt",
+    "allProjects": "All projects",
+    "allAgents": "All Agents",
+    "allStatus": "All statuses",
+    "allTasks": "All tasks",
+    "reset": "Reset",
+    "total": "{0} tasks",
+    "status": {
+      "enabled": "Enabled",
+      "disabled": "Disabled"
+    },
+    "runTrigger": {
+      "schedule": "Scheduled",
+      "manual": "Run now"
+    },
+    "logStatus": {
+      "running": "In progress",
+      "success": "Success",
+      "skip": "Failed skip",
+      "failed": "Failed"
+    },
+    "columns": {
+      "task": "Task",
+      "session": "Session",
+      "schedule": "Schedule",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "sessionMode": {
+      "label": "Session mode",
+      "new": "New session each run",
+      "reuse": "Reuse last session",
+      "reuseTip": "If the reused session was deleted or no longer exists, a new one is created."
+    },
+    "sessionBlockPolicy": {
+      "label": "Session blocking policy",
+      "skip": "Skip this run",
+      "force": "Force run",
+      "skipTip": "Reused session running: skip this run.",
+      "forceTip": "Reused session running: stop it and rerun."
+    },
+    "fields": {
+      "name": "Task name",
+      "namePlaceholder": "e.g. Daily project review",
+      "prompt": "Task prompt",
+      "promptPlaceholder": "Content sent to the Agent on each run",
+      "schedule": "Schedule rule",
+      "project": "Project",
+      "agent": "Agent",
+      "provider": "Provider",
+      "model": "Model",
+      "reasoning": "Reasoning",
+      "permission": "Permission",
+      "permissionTip": "Scheduled runs are unattended: out-of-workspace writes and commands are denied automatically. Select \"Full access\" if the task needs a wider scope.",
+      "timeout": "Task timeout",
+      "timeoutNone": "No limit",
+      "timeoutCustom": "Custom",
+      "timeoutTip": "The watchdog stops this run once it exceeds the limit. With no limit, runs are never stopped automatically.",
+      "minutes": "minutes",
+      "enabled": "Enable task"
+    },
+    "section": {
+      "session": "Session"
+    },
+    "rule": {
+      "triggerTip": "Click to configure the schedule rule",
+      "frequency": {
+        "daily": "Daily",
+        "weekly": "Weekly",
+        "monthly": "Monthly",
+        "interval": "Interval",
+        "custom": "Custom"
+      },
+      "time": "Time",
+      "weekdays": "Weekday",
+      "monthDays": "Day",
+      "intervalEvery": "Every",
+      "unit": {
+        "minute": "minutes",
+        "hour": "hours"
+      },
+      "weekLabel": "{0}",
+      "nextRuns": "Next runs",
+      "previewEmpty": "This rule has no future run",
+      "invalid": "Invalid schedule rule, please reconfigure",
+      "fields": {
+        "year": "Year",
+        "month": "Month",
+        "day": "Day",
+        "weekday": "Weekday",
+        "hour": "Hour",
+        "minute": "Minute",
+        "second": "Second"
+      },
+      "mode": {
+        "any": "Any",
+        "values": "Specific",
+        "range": "Range",
+        "step": "Step"
+      },
+      "rangeSeparator": "to",
+      "stepPrefix": "From",
+      "stepUnit": "every",
+      "fieldRange": "{0} to {1}",
+      "fieldStep": "from {0} every {1}",
+      "dayLast": "Last day",
+      "separator": ", ",
+      "weekday": {
+        "1": "Mon",
+        "2": "Tue",
+        "3": "Wed",
+        "4": "Thu",
+        "5": "Fri",
+        "6": "Sat",
+        "7": "Sun"
+      },
+      "desc": {
+        "dailyAt": "Daily at {0}",
+        "weeklyAt": "Weekly on {0} at {1}",
+        "monthlyAt": "Monthly on day {0} at {1}",
+        "monthlyAndWeekly": "Monthly on day {0} and weekly on {1} at {2}",
+        "yearPart": "{0}",
+        "monthPart": "month {0}",
+        "dayPart": "day {0}",
+        "weekdayPart": "weekly on {0}",
+        "everyNMinutes": "Every {0} minutes",
+        "everyNHours": "Every {0} hours",
+        "everyMinute": "Every minute",
+        "everySecond": "Every second",
+        "custom": "{0}"
+      }
+    },
+    "actions": {
+      "runNow": "Run now",
+      "logs": "Run log",
+      "clearLogs": "Clear log"
+    },
+    "deleteConfirm": "Delete scheduled task \"{0}\"? Session history will be kept and its run log will be deleted.",
+    "deleted": "Scheduled task deleted",
+    "saved": "Scheduled task saved",
+    "runStarted": "Task started",
+    "openSession": "Open session",
+    "nextRun": "Next {0}",
+    "nextRunNone": "Not scheduled",
+    "runNowFailed": "Failed to start task: {0}",
+    "projectRequired": "Select a project",
+    "agentRequired": "Select an Agent",
+    "modelRequired": "Select a model",
+    "logs": {
+      "taskFilter": "Task",
+      "rangeFilter": "Triggered at",
+      "rangeStart": "Start date",
+      "rangeEnd": "End date",
+      "task": "Task",
+      "triggerType": "Trigger",
+      "status": "Status",
+      "session": "Session",
+      "triggeredAt": "Triggered at",
+      "empty": "No run log yet",
+      "unknownTask": "Task deleted",
+      "deletedSession": "Session deleted",
+      "clearTitle": "Clear run log",
+      "clearTip": "Delete run logs by task and trigger time range. Deletion cannot be undone; session history is not affected. Select at least a task or a time range.",
+      "clearSubmit": "Clear",
+      "clearRequired": "Select at least a task or a time range",
+      "clearDone": "Deleted {0} run log(s)",
+      "clearNone": "No matching run log"
+    },
+    "dispatch": {
+      "keepAwake": "Prevent computer sleep",
+      "keepAwakeDesc": "Prevent the computer from sleeping (the display may still turn off) so scheduled tasks are not suspended. Closing the lid or sleeping manually still pauses them.",
+      "maxConcurrency": "Maximum concurrent tasks",
+      "maxConcurrencyDesc": "Upper limit of simultaneously running tasks ({0} ~ {1}). Triggers beyond the limit are recorded as skipped.",
+      "watchdogInterval": "Task watchdog interval",
+      "watchdogIntervalDesc": "How often (in seconds) to check tasks: correct timers and stop runs that exceed their timeout ({0} ~ {1} seconds).",
+      "watchdogLastRun": "Last check: {0}",
+      "watchdogNextRun": "Next check: {0}",
+      "saved": "Dispatch settings saved"
+    },
+    "seed": {
+      "dailyNews": {
+        "name": "Daily briefing",
+        "prompt": "Every morning, gather today's hot topics from 2-3 authoritative tech news sites and pick 5 noteworthy items, each with a one-sentence takeaway and source link. Choose the sources yourself, preferring official blogs and mainstream tech media. Write the result to briefing/YYYY-MM-DD.md, creating the folder if missing; list unreachable sites at the end. Read and write only inside the working directory, and skip any action that needs permission approval."
+      },
+      "weeklyIndustry": {
+        "name": "Weekly industry watch",
+        "prompt": "Research last week's AI industry news, focusing on open-source models, AI products and applications, industry policy and moves of major players. Public sites are fine; choose the sources yourself, preferring official and authoritative media. Write a one-page watch: 3 trend judgments, 3 items worth following (with links) and 1 takeaway for us. Write the result to industry-watch/YYYY-Www.md, creating the folder if missing. Read and write only inside the working directory, and skip any action that needs permission approval."
+      }
+    }
+  }
+}

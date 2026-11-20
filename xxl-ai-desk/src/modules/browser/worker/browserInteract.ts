@@ -1,5 +1,5 @@
 /*
- * 浏览器交互类工具：悬停、按键、下拉选择与滚动。
+ * 浏览器交互类工具：移动鼠标、按键与滚动。
  *   - 与读取类工具一致，统一经动作桥转发渲染层执行；
  *   - 交互元素优先使用 snapshot_browser 返回的 ref，selector 兜底。
  *
@@ -18,44 +18,6 @@ export type BrowserSchemaBuilder = Pick<
   typeof SchemaModule,
   'obj' | 'str' | 'opt' | 'num' | 'bool' | 'oneOf' | 'arr'
 >
-
-/* 悬停元素：触发 hover 菜单与提示 */
-export function createHoverBrowserTool(
-  Schema: BrowserSchemaBuilder,
-  context: ToolContext
-): AgentTool {
-  return {
-    name: 'hover_browser',
-    label: '悬停页面元素',
-    description: describe(
-      '将鼠标悬停到页面元素上，用于展开悬停菜单或提示。优先使用 snapshot_browser 返回的 ref，也可传 CSS selector',
-      'Hover over an element to reveal hover menus or tooltips. Prefer the ref from snapshot_browser; a CSS selector also works.'
-    ),
-    parameters: Schema.obj({
-      ref: Schema.opt(Schema.str({ description: 'snapshot_browser 返回的元素 ref' })),
-      selector: Schema.opt(Schema.str({ description: 'CSS 选择器（ref 缺失时使用）' }))
-    }),
-    executionMode: 'sequential',
-    execute: async (_toolCallId, params) => {
-      const { ref, selector } = params as { ref?: string; selector?: string }
-      if (!ref && !selector) {
-        return toolError(tr(context, 'runtime.tool.hoverNeedTarget'))
-      }
-      const result = await runBrowserAction(context, {
-        type: 'hover',
-        ref: ref?.trim() || undefined,
-        selector: selector?.trim() || undefined
-      })
-      if (!result.ok) {
-        return toolError(result.error || tr(context, 'runtime.tool.hoverFailed'))
-      }
-      return text(
-        `${result.summary || tr(context, 'runtime.tool.hovered')}\n${pageHeader(result, context)}`,
-        { url: result.url ?? '', title: result.title ?? '' }
-      )
-    }
-  }
-}
 
 /* 按键：向当前焦点元素或指定元素发送按键 */
 export function createPressBrowserTool(
@@ -97,44 +59,93 @@ export function createPressBrowserTool(
   }
 }
 
-/* 下拉选择：按 option value 或可见文本选择 */
-export function createSelectBrowserTool(
+/* 逐字符输入：先聚焦目标，再按真实键盘事件输入文本 */
+export function createTypeBrowserTool(
   Schema: BrowserSchemaBuilder,
   context: ToolContext
 ): AgentTool {
   return {
-    name: 'select_browser',
-    label: '选择下拉选项',
+    name: 'type_browser',
+    label: '页面输入文本',
     description: describe(
-      '选择 <select> 下拉框选项，value 匹配 option 的 value 或可见文本；元素用 ref 或 CSS selector 定位',
-      'Select an option in a <select> dropdown. value matches the option value or visible text; locate the element with a ref or CSS selector.'
+      '向当前焦点元素或指定元素逐字符输入文本，事件与真实键盘一致（keydown / char / keyup），适合输入框、聊天框与富文本编辑器；可先用 click_browser 聚焦输入框后省略 ref。clear=true 先清空原内容，delay_ms 控制字符间隔（默认 20ms），text 中的 \\n 表示回车',
+      'Type text character by character into the focused element or a specified element with real keydown / char / keyup events. Works for inputs, chat boxes and rich text editors. Focus with click_browser first to omit ref. clear=true clears existing content; delay_ms sets the per-character delay (default 20ms); \\n inserts Enter.'
     ),
     parameters: Schema.obj({
-      ref: Schema.opt(Schema.str({ description: 'snapshot_browser 返回的元素 ref' })),
-      selector: Schema.opt(Schema.str({ description: 'CSS 选择器（ref 缺失时使用）' })),
-      value: Schema.str({ description: '选项的 value 或可见文本' })
+      text: Schema.str({ description: '要输入的文本，\\n 表示换行' }),
+      ref: Schema.opt(Schema.str({ description: '目标元素 ref，缺省为当前焦点元素' })),
+      selector: Schema.opt(Schema.str({ description: '目标元素 CSS 选择器' })),
+      clear: Schema.opt(Schema.bool({ description: '输入前是否清空原内容，默认 false' })),
+      delay_ms: Schema.opt(Schema.num({ description: '字符间隔毫秒数，默认 20，最多 200' }))
     }),
     executionMode: 'sequential',
     execute: async (_toolCallId, params) => {
-      const { ref, selector, value } = params as { ref?: string; selector?: string; value?: string }
-      if (!ref && !selector) {
-        return toolError(tr(context, 'runtime.tool.selectNeedTarget'))
+      const { text: content, ref, selector, clear, delay_ms } = params as {
+        text?: string
+        ref?: string
+        selector?: string
+        clear?: boolean
+        delay_ms?: number
       }
-      if (!value?.trim()) {
-        return toolError(tr(context, 'runtime.tool.selectValueRequired'))
+      if (!content) {
+        return toolError(tr(context, 'runtime.tool.typeTextRequired'))
       }
       const result = await runBrowserAction(context, {
-        type: 'select',
+        type: 'type',
+        text: content,
         ref: ref?.trim() || undefined,
         selector: selector?.trim() || undefined,
-        value: value.trim()
+        clear: clear === true,
+        delayMs: delay_ms
       })
       if (!result.ok) {
-        return toolError(result.error || tr(context, 'runtime.tool.selectFailed'))
+        return toolError(result.error || tr(context, 'runtime.tool.typeFailed'))
       }
       return text(
-        `${result.summary || tr(context, 'runtime.tool.selected', [value.trim()])}\n${pageHeader(result, context)}`,
-        { url: result.url ?? '', title: result.title ?? '', value: value.trim() }
+        `${result.summary || tr(context, 'runtime.tool.typed', [result.typed ?? 0])}\n${pageHeader(result, context)}`,
+        {
+          url: result.url ?? '',
+          title: result.title ?? '',
+          typed: result.typed ?? 0
+        }
+      )
+    }
+  }
+}
+
+/* 移动鼠标：把指针移到视口坐标并停住，触发悬停效果（二级菜单 / 提示框 / 悬浮按钮） */
+export function createMoveBrowserTool(
+  Schema: BrowserSchemaBuilder,
+  context: ToolContext
+): AgentTool {
+  return {
+    name: 'move_browser',
+    label: '移动鼠标',
+    description: describe(
+      '把鼠标移到页面坐标并停住，不点击；用于触发只有悬停才出现的二级菜单、提示框与悬浮操作按钮。坐标为像素（相对内容区左上角），可先截图定位',
+      'Move the mouse pointer to a page coordinate without clicking. Use it for hover-only submenus, tooltips and floating action buttons. Coordinates are pixels relative to the content area; take a screenshot to locate them.'
+    ),
+    parameters: Schema.obj({
+      x: Schema.num({ description: '视口横坐标（像素，相对内容区左上角）' }),
+      y: Schema.num({ description: '视口纵坐标（像素，相对内容区左上角）' })
+    }),
+    executionMode: 'sequential',
+    execute: async (_toolCallId, params) => {
+      const { x, y } = params as { x?: number; y?: number }
+      if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        return toolError(tr(context, 'runtime.tool.moveNeedPoint'))
+      }
+      const result = await runBrowserAction(context, {
+        type: 'move',
+        x: Number(x),
+        y: Number(y)
+      })
+      if (!result.ok) {
+        return toolError(result.error || tr(context, 'runtime.tool.moveFailed'))
+      }
+      return text(
+        `${result.summary || tr(context, 'runtime.tool.moved', [Number(x), Number(y)])}\n${pageHeader(result, context)}`,
+        { url: result.url ?? '', title: result.title ?? '', x: Number(x), y: Number(y) }
       )
     }
   }

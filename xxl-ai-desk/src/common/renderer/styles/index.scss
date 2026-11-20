@@ -24,7 +24,7 @@ body {
   font-size: var(--desk-font-md);
 }
 
-/* --- 外壳布局：结构样式由 App / AppTopbar / SidebarShell 组件自身维护 --- */
+/* --- 外壳布局：结构样式由 App / Navbar / Sidebar / CollapseShell 组件自身维护 --- */
 
 /* 拖拽调整侧栏宽度期间：禁用文本选中，统一为列宽光标 */
 body.resizing {
@@ -253,42 +253,75 @@ body.resizing-vertical {
 }
 
 
-/* --- 面板工具按钮：文件 / Git 工具栏共用 --- */
-.panel-btn {
-  display: inline-flex;
+/* --- 工具条：工具面板二级工具条与笔记工具栏共用（文件 / Git / 终端 / 浏览器 / 诊断 / 笔记） --- */
+.desk-toolbar {
+  flex-shrink: 0;
+  height: var(--desk-toolbar-height);
+  padding: 0 8px;
+  display: flex;
   align-items: center;
-  gap: 5px;
-  height: 28px;
-  padding: 0 10px;
-  border: 1px solid var(--desk-border);
-  border-radius: 8px;
-  background: var(--desk-bg);
-  color: var(--desk-text-secondary);
-  font-size: var(--desk-font-sm);
-  cursor: pointer;
-  transition:
-    background 0.15s ease,
-    color 0.15s ease,
-    border-color 0.15s ease;
+  gap: 6px;
+  border-bottom: 1px solid var(--desk-border);
+  background: var(--desk-bg-elevated);
 }
 
-.panel-btn:hover:not(:disabled) {
+.desk-toolbar-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  overflow: hidden;
+}
+
+.desk-toolbar-actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.desk-toolbar-divider {
+  flex-shrink: 0;
+  width: 1px;
+  height: 12px;
+  margin: 0 4px;
+  background: var(--desk-border);
+}
+
+.desk-toolbar-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--desk-text-secondary);
+  font-size: var(--desk-font-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.desk-toolbar-btn:hover:not(:disabled) {
   background: var(--desk-primary-soft);
   color: var(--desk-text);
 }
 
-.panel-btn.active {
-  background: var(--desk-segment-bg);
-  color: var(--desk-text);
-  border-color: var(--desk-segment-border);
+/* 当前生效 / 打开状态：浅品牌底 + 主色 */
+.desk-toolbar-btn.active {
+  background: var(--desk-primary-soft);
+  color: var(--desk-primary);
 }
 
-.panel-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.desk-toolbar-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
-.panel-btn .chevron {
+.desk-toolbar-btn .chevron {
   font-size: var(--desk-icon-xs);
 }
 
@@ -299,12 +332,18 @@ body.resizing-vertical {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--desk-border);
+  background: var(--desk-scrollbar-thumb);
   border-radius: 8px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--desk-text-tertiary);
+  background: var(--desk-scrollbar-thumb-hover);
+}
+
+/* --- 文本选区：全应用统一配色，预览区 / 表单等原生选区与编辑器保持一致 --- */
+::selection {
+  background: var(--desk-selection);
+  color: inherit;
 }
 
 /* --- 会话内搜索高亮（CSS Custom Highlight API） --- */
@@ -369,7 +408,7 @@ body.resizing-vertical {
 
 .markdown-body video {
   max-height: 480px;
-  background: #000;
+  background: var(--desk-media-backdrop);
 }
 
 .markdown-body audio {
@@ -756,15 +795,34 @@ body.resizing-vertical {
 
 .hljs-addition {
   color: var(--code-green);
-  background: rgba(46, 160, 67, 0.15);
+  background: color-mix(in srgb, var(--code-green) 15%, transparent);
 }
 
 .hljs-deletion {
   color: var(--code-red);
-  background: rgba(248, 81, 73, 0.15);
+  background: color-mix(in srgb, var(--code-red) 15%, transparent);
 }
 
 /* --- 聊天代码块：GitHub 风格「语言标签 + 复制按钮」头部 --- */
+/* Mermaid 图表：渲染成功后替代代码块，按内容宽度自适应 */
+.markdown-body .mermaid-block {
+  width: fit-content;
+  max-width: 100%;
+  margin: 10px auto;
+  padding: 10px 12px;
+  overflow-x: auto;
+  border: 1px solid var(--desk-border);
+  border-radius: 8px;
+  background: var(--desk-surface-content);
+  text-align: center;
+}
+
+.markdown-body .mermaid-block svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
 .markdown-body .code-block {
   margin: 0.8em 0;
   border: 1px solid var(--desk-code-border);
@@ -823,7 +881,7 @@ body.resizing-vertical {
 }
 
 .markdown-body .code-copy.copied {
-  color: #2da44e;
+  color: var(--code-green);
 }
 
 .markdown-body .code-block pre {
@@ -912,6 +970,12 @@ html.dark .el-button--primary {
   --el-table-border-color: var(--desk-border);
 }
 
+/* --- 表格空状态：清除空文本 60px 行高与 50% 宽度约束，避免文案与按钮之间出现大段留白 --- */
+.el-table__empty-text {
+  width: 100%;
+  line-height: normal;
+}
+
 /* --- 主按钮：浅品牌底 + 明确边框，兼顾可点击感与克制感 --- */
 .el-button--primary:not(.is-text):not(.is-link) {
   --el-button-bg-color: var(--desk-btn-bg);
@@ -951,11 +1015,30 @@ html.dark .el-button--primary {
   cursor: default;
 }
 
-.sort-dropdown .sort-check {
-  margin-left: auto;
+/* 排序项：名称居左、对勾居右，选中项加粗并使用高对比色 */
+.sort-dropdown .sort-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.sort-dropdown .el-dropdown-menu__item {
   padding-left: 12px;
-  font-size: var(--desk-font-sm);
-  color: var(--desk-primary);
+  padding-right: 12px;
+}
+
+.sort-dropdown .sort-active {
+  color: var(--desk-text);
+  font-weight: 600;
+}
+
+.sort-dropdown .sort-check {
+  flex-shrink: 0;
+  margin-right: 0;
+  font-size: var(--desk-icon-sm);
+  color: var(--desk-primary-hover);
 }
 
 /* --- 权限选择下拉：完全权限项用危险色，提示越权风险 --- */

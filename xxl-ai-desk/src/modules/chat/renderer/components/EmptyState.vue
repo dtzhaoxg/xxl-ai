@@ -6,9 +6,8 @@ let typingPlayed = false
 <script setup lang="ts">
 /* 空态欢迎页：Logo + 标题（本次运行首次进入时逐字展示，之后切换仅淡入） */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { t } from '@renderer/shell/i18n'
+import { t } from '@common/renderer/i18n'
 import { useSettingsStore } from '@modules/settings/renderer'
-import logo from '@resources/icon.png'
 
 const settings = useSettingsStore()
 
@@ -82,7 +81,7 @@ onBeforeUnmount(stopTyping)
 
 <template>
   <div class="empty-state">
-    <img class="empty-logo" :src="logo" alt="logo" />
+    <img class="empty-logo" :src="settings.displayLogoUrl" alt="logo" />
     <h1 class="empty-title">
       <span>{{ displayTitle }}</span>
       <span v-if="typing" class="empty-caret" aria-hidden="true"></span>

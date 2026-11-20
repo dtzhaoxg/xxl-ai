@@ -8,7 +8,8 @@ import { defineStore } from 'pinia'
 import { ElMessage } from 'element-plus'
 import { api } from '@common/renderer/api'
 import { LAYOUT } from '@common/renderer/config/layout'
-import { t } from '@renderer/shell/i18n'
+import { ipcErrorMessage } from '@common/renderer/utils/ipcError'
+import { t } from '@common/renderer/i18n'
 import type {
   NoteContent,
   NoteEntry,
@@ -22,6 +23,9 @@ import { baseName, isUnder, parentDir } from '@modules/apps/note/renderer/utils/
 /* 视图模式 */
 export type NoteMode = 'edit' | 'split' | 'preview'
 
+/* 保存状态：idle 未打开笔记，editing 有未保存改动，saving 正在写盘 */
+export type NoteSaveState = 'idle' | 'editing' | 'saving' | 'saved' | 'error'
+
 /* 合法视图模式 */
 function isNoteMode(value: unknown): value is NoteMode {
   return value === 'edit' || value === 'split' || value === 'preview'
@@ -32,8 +36,7 @@ const EMPTY_SETTINGS: NoteSettings = {
   storageDir: '',
   resolvedStorageDir: '',
   defaultStorageDir: '',
-  imageDir: '',
-  storageFallback: false
+  imageDir: ''
 }
 
 /* 界面偏好存储键 */
@@ -74,7 +77,13 @@ function readUi(): NoteUiState {
 
 /* 错误对象 → 可读文本 */
 function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
+  return ipcErrorMessage(error)
+}
+
+/* 笔记修改时间 → 毫秒时间戳；非法时返回 null */
+function savedTimeOf(note: NoteContent): number | null {
+  const time = Date.parse(note.updateTime)
+  return Number.isNaN(time) ? null : time
 }
 
 export const useNoteStore = defineStore('note', () => {
@@ -86,6 +95,10 @@ export const useNoteStore = defineStore('note', () => {
   const loading = ref(false)
   const saving = ref(false)
   const error = ref('')
+  /* 最近一次成功保存的时间（毫秒）；null 表示尚未在本会话保存过 */
+  const savedAt = ref<number | null>(null)
+  /* 保存失败信息：与加载错误分开，供状态栏展示与重试 */
+  const saveError = ref('')
 
   /* 目录树：按绝对目录缓存子项 */
   const childrenMap = ref<Record<string, NoteEntry[]>>({})
@@ -100,24 +113,60 @@ export const useNoteStore = defineStore('note', () => {
   const current = ref<NoteContent | null>(null)
   const draft = ref('')
   const selectedPath = ref('')
+  /* 光标位置：状态栏展示行 / 列 */
+  const cursorLine = ref(1)
+  const cursorColumn = ref(1)
+  /* 选中字符数：状态栏展示选中文字长度，0 表示无选区 */
+  const selectedLength = ref(0)
 
   /* 界面偏好 */
   const mode = ref<NoteMode>(ui.mode)
   const treeCollapsed = ref(ui.treeCollapsed)
   const treeWidth = ref(ui.treeWidth)
 
-  /* 根目录与根名称 */
+  /* 根目录 */
   const rootPath = computed(() => settings.value.resolvedStorageDir)
-  const rootName = computed(() => baseName(rootPath.value) || t('note.title'))
 
   /* 是否未保存 */
   const dirty = computed(() => Boolean(current.value) && draft.value !== current.value?.content)
+
+  /* 保存状态：状态栏据此展示「编辑中 / 保存中 / 已保存 / 保存失败」 */
+  const saveState = computed<NoteSaveState>(() => {
+    if (!current.value) {
+      return 'idle'
+    }
+    if (saveError.value) {
+      return 'error'
+    }
+    if (saving.value) {
+      return 'saving'
+    }
+    return dirty.value ? 'editing' : 'saved'
+  })
 
   /* 大纲 */
   const outline = computed<OutlineItem[]>(() => parseOutline(draft.value))
 
   /* 当前笔记名称 */
   const currentName = computed(() => (current.value ? baseName(current.value.path) : ''))
+
+  /* 更新光标位置：由编辑器选区变化时写入 */
+  function setCursor(line: number, column: number): void {
+    cursorLine.value = line
+    cursorColumn.value = column
+  }
+
+  /* 更新选中字符数：由编辑器选区变化时写入 */
+  function setSelectionLength(length: number): void {
+    selectedLength.value = length > 0 ? length : 0
+  }
+
+  /* 重置光标位置：切换 / 清空笔记时回到首行首列并清空选区 */
+  function resetCursor(): void {
+    cursorLine.value = 1
+    cursorColumn.value = 1
+    selectedLength.value = 0
+  }
 
   /* 自动保存定时器 */
   let saveTimer: ReturnType<typeof setTimeout> | null = null
@@ -139,16 +188,20 @@ export const useNoteStore = defineStore('note', () => {
     const path = current.value.path
     const content = draft.value
     saving.value = true
+    /* 重试期间先清空上次失败信息，状态栏显示「保存中」 */
+    saveError.value = ''
     try {
       const saved = await api.note.write(path, content)
       /* 保存期间切走了笔记：只更新基线，不覆盖当前内容 */
       if (current.value?.path === path) {
         current.value = saved
+        savedAt.value = savedTimeOf(saved)
       }
       return true
-    } catch (saveError) {
-      error.value = messageOf(saveError)
-      ElMessage.error(t('note.saveFailed', [error.value]))
+    } catch (writeError) {
+      saveError.value = messageOf(writeError)
+      error.value = saveError.value
+      ElMessage.error(t('note.saveFailed', [saveError.value]))
       return false
     } finally {
       saving.value = false
@@ -338,6 +391,52 @@ export const useNoteStore = defineStore('note', () => {
     }
   }
 
+  /* 已加载的目录路径：用于判断「全部展开」状态 */
+  const loadedDirs = computed(() => {
+    const dirs = new Set<string>()
+    for (const entries of Object.values(childrenMap.value)) {
+      for (const entry of entries) {
+        if (entry.isDir) {
+          dirs.add(entry.path)
+        }
+      }
+    }
+    return [...dirs]
+  })
+
+  /* 是否已展开全部已加载目录 */
+  const allDirsExpanded = computed(
+    () => loadedDirs.value.length > 0 && loadedDirs.value.every((dir) => expanded.value[dir])
+  )
+
+  /* 展开全部目录：逐层加载并展开子目录（目录项不含符号链接，不会出现循环） */
+  async function expandAllDirs(): Promise<void> {
+    if (!rootPath.value) {
+      return
+    }
+    async function walk(dir: string): Promise<void> {
+      expanded.value = { ...expanded.value, [dir]: true }
+      await loadChildren(dir)
+      const subDirs = (childrenMap.value[dir] ?? []).filter((entry) => entry.isDir)
+      await Promise.all(subDirs.map((entry) => walk(entry.path)))
+    }
+    await walk(rootPath.value)
+  }
+
+  /* 折叠全部目录：仅保留根目录展开态（根目录不直接展示） */
+  function collapseAllDirs(): void {
+    expanded.value = rootPath.value ? { [rootPath.value]: true } : {}
+  }
+
+  /* 全部展开 / 全部折叠：按当前全部展开状态切换 */
+  async function toggleAllDirs(): Promise<void> {
+    if (allDirsExpanded.value) {
+      collapseAllDirs()
+      return
+    }
+    await expandAllDirs()
+  }
+
   /* 重置工作区（切换存储目录 / 停用时） */
   function resetWorkspace(): void {
     clearSaveTimer()
@@ -351,6 +450,9 @@ export const useNoteStore = defineStore('note', () => {
     current.value = null
     draft.value = ''
     error.value = ''
+    saveError.value = ''
+    savedAt.value = null
+    resetCursor()
   }
 
   /* 打开笔记：未保存内容先落盘，失败则中止切换 */
@@ -368,6 +470,9 @@ export const useNoteStore = defineStore('note', () => {
       current.value = loadedNote
       draft.value = loadedNote.content
       selectedPath.value = path
+      savedAt.value = savedTimeOf(loadedNote)
+      saveError.value = ''
+      resetCursor()
     } catch (loadError) {
       error.value = messageOf(loadError)
       ElMessage.error(t('note.loadFailed', [error.value]))
@@ -397,67 +502,96 @@ export const useNoteStore = defineStore('note', () => {
         const loadedNote = await api.note.read(path)
         current.value = loadedNote
         draft.value = loadedNote.content
+        savedAt.value = savedTimeOf(loadedNote)
+        saveError.value = ''
       } catch {
         /* 文件已被删除：回到空态 */
         current.value = null
         draft.value = ''
         selectedPath.value = ''
+        savedAt.value = null
+        saveError.value = ''
+        resetCursor()
       }
     }
   }
 
-  /* 新建笔记 */
-  async function createNote(dir: string | undefined, name: string): Promise<NoteEntry | null> {
-    try {
-      const entry = await api.note.createNote(dir, name)
-      const parent = dir || rootPath.value
-      /* 展开目录树，确保新建结果可见（树可能已被用户收起） */
-      treeCollapsed.value = false
-      expanded.value = { ...expanded.value, [parent]: true }
-      await loadChildren(parent)
-      await openNote(entry.path)
-      return entry
-    } catch (createError) {
-      ElMessage.error(messageOf(createError))
-      return null
-    }
+  /* 新建笔记：失败直接抛出，由弹框就地展示错误 */
+  async function createNote(dir: string | undefined, name: string): Promise<NoteEntry> {
+    const entry = await api.note.createNote(dir, name)
+    const parent = dir || rootPath.value
+    /* 展开目录树，确保新建结果可见（树可能已被用户收起） */
+    treeCollapsed.value = false
+    expanded.value = { ...expanded.value, [parent]: true }
+    await loadChildren(parent)
+    await openNote(entry.path)
+    return entry
   }
 
-  /* 新建目录 */
-  async function createFolder(dir: string | undefined, name: string): Promise<NoteEntry | null> {
-    try {
-      const entry = await api.note.createFolder(dir, name)
-      const parent = dir || rootPath.value
-      /* 展开目录树，确保新建结果可见（树可能已被用户收起） */
-      treeCollapsed.value = false
-      expanded.value = { ...expanded.value, [parent]: true }
-      await loadChildren(parent)
-      return entry
-    } catch (createError) {
-      ElMessage.error(messageOf(createError))
-      return null
-    }
+  /* 新建目录：失败直接抛出，由弹框就地展示错误 */
+  async function createFolder(dir: string | undefined, name: string): Promise<NoteEntry> {
+    const entry = await api.note.createFolder(dir, name)
+    const parent = dir || rootPath.value
+    /* 展开目录树，确保新建结果可见（树可能已被用户收起） */
+    treeCollapsed.value = false
+    expanded.value = { ...expanded.value, [parent]: true }
+    await loadChildren(parent)
+    return entry
   }
 
-  /* 重命名笔记 / 目录 */
-  async function renameEntry(entry: NoteEntry, name: string): Promise<NoteEntry | null> {
+  /* 重命名笔记 / 目录：失败直接抛出，由弹框就地展示错误 */
+  async function renameEntry(entry: NoteEntry, name: string): Promise<NoteEntry> {
     if (!(await save())) {
+      throw new Error(t('note.saveFailed', [error.value]))
+    }
+    const renamed = await api.note.rename(entry.path, name)
+    if (current.value && isUnder(current.value.path, entry.path)) {
+      const path = current.value.path.replace(entry.path, renamed.path)
+      const loadedNote = await api.note.read(path)
+      current.value = loadedNote
+      draft.value = loadedNote.content
+      selectedPath.value = loadedNote.path
+      savedAt.value = savedTimeOf(loadedNote)
+    }
+    await refresh()
+    return renamed
+  }
+
+  /* 复制笔记 / 目录：在同级目录生成副本并刷新该目录 */
+  async function copyEntry(entry: NoteEntry): Promise<NoteEntry | null> {
+    try {
+      const copied = await api.note.copy(entry.path)
+      await loadChildren(parentDir(copied.path))
+      return copied
+    } catch (copyError) {
+      ElMessage.error(messageOf(copyError))
       return null
     }
+  }
+
+  /* 移动笔记 / 目录到目标目录：同步更新当前打开笔记的路径 */
+  async function moveEntry(entry: NoteEntry, targetDir: string): Promise<boolean> {
+    if (!(await save())) {
+      return false
+    }
     try {
-      const renamed = await api.note.rename(entry.path, name)
+      const moved = await api.note.move(entry.path, targetDir)
       if (current.value && isUnder(current.value.path, entry.path)) {
-        const path = current.value.path.replace(entry.path, renamed.path)
+        const path = current.value.path.replace(entry.path, moved.path)
         const loadedNote = await api.note.read(path)
         current.value = loadedNote
         draft.value = loadedNote.content
         selectedPath.value = loadedNote.path
+        savedAt.value = savedTimeOf(loadedNote)
       }
+      /* 展开目标目录，确保移动结果可见 */
+      expanded.value = { ...expanded.value, [targetDir]: true }
+      await loadChildren(targetDir)
       await refresh()
-      return renamed
-    } catch (renameError) {
-      ElMessage.error(messageOf(renameError))
-      return null
+      return true
+    } catch (moveError) {
+      ElMessage.error(messageOf(moveError))
+      return false
     }
   }
 
@@ -469,6 +603,9 @@ export const useNoteStore = defineStore('note', () => {
         current.value = null
         draft.value = ''
         selectedPath.value = ''
+        savedAt.value = null
+        saveError.value = ''
+        resetCursor()
       }
       await refresh()
       return true
@@ -531,25 +668,36 @@ export const useNoteStore = defineStore('note', () => {
     current,
     draft,
     selectedPath,
+    cursorLine,
+    cursorColumn,
+    selectedLength,
     mode,
     treeCollapsed,
     treeWidth,
     rootPath,
-    rootName,
     dirty,
+    saveState,
+    savedAt,
+    saveError,
     outline,
     currentName,
+    allDirsExpanded,
     loadSettings,
     ensureLoaded,
     saveSettings,
     selectStorageDir,
     reloadTree,
     toggleDir,
+    toggleAllDirs,
     openNote,
     save,
+    setCursor,
+    setSelectionLength,
     createNote,
     createFolder,
     renameEntry,
+    copyEntry,
+    moveEntry,
     trashEntry,
     pickImages,
     saveImageBytes,

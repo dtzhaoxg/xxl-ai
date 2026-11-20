@@ -6,7 +6,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { t } from '@renderer/shell/i18n'
+import { t } from '@common/renderer/i18n'
+import { PageHeading } from '@common/renderer/components'
 import AppCard from '@modules/appCenter/renderer/components/AppCard.vue'
 import { appSettingsOf, useAppCenterStore, type AppItem } from '@modules/appCenter/renderer'
 
@@ -61,9 +62,10 @@ onMounted(async () => {
 
 <template>
   <div class="app-page">
-    <div class="app-page-header">
-      <div class="page-tip">{{ t('appCenter.myAppsHint') }}</div>
-    </div>
+    <PageHeading
+      :title="t('appCenter.myApps')"
+      :description="t('appCenter.myAppsHint')"
+    />
 
     <el-scrollbar class="app-page-body">
       <div v-if="store.installedApps.length > 0" class="app-grid">
@@ -83,7 +85,7 @@ onMounted(async () => {
         <el-icon class="app-empty-icon"><Grid /></el-icon>
         <div class="app-empty-title">{{ t('appCenter.emptyInstalled') }}</div>
         <div class="app-empty-tip">{{ t('appCenter.emptyInstalledTip') }}</div>
-        <el-button type="primary" size="small" @click="router.push('/apps/market')">
+        <el-button type="primary" @click="router.push('/apps/market')">
           {{ t('appCenter.goMarket') }}
         </el-button>
       </div>
@@ -104,19 +106,6 @@ onMounted(async () => {
   flex-direction: column;
   overflow: hidden;
   background: var(--desk-bg);
-}
-
-.app-page-header {
-  flex-shrink: 0;
-  padding: 18px 28px 0;
-  border-bottom: 1px solid var(--desk-border);
-}
-
-.page-tip {
-  padding-bottom: 16px;
-  color: var(--desk-text-tertiary);
-  font-size: var(--desk-font-xs);
-  line-height: 1.6;
 }
 
 .app-page-body {
@@ -144,7 +133,7 @@ onMounted(async () => {
 }
 
 .app-empty-icon {
-  font-size: 34px;
+  font-size: var(--desk-icon-xl);
 }
 
 .app-empty-title {

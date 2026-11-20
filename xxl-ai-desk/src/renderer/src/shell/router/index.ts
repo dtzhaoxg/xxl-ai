@@ -23,6 +23,25 @@ const router = createRouter({
       component: () => import('@modules/chat/renderer/pages/index.vue')
     },
     {
+      path: '/schedule',
+      redirect: '/schedule/tasks'
+    },
+    {
+      path: '/schedule/tasks',
+      name: 'schedule-tasks',
+      component: () => import('@modules/schedule/renderer/pages/tasks.vue')
+    },
+    {
+      path: '/schedule/logs',
+      name: 'schedule-logs',
+      component: () => import('@modules/schedule/renderer/pages/logs.vue')
+    },
+    {
+      path: '/schedule/dispatch',
+      name: 'schedule-dispatch',
+      component: () => import('@modules/schedule/renderer/pages/dispatch.vue')
+    },
+    {
       path: '/settings',
       name: 'settings',
       component: () => import('@modules/settings/renderer/pages/index.vue')

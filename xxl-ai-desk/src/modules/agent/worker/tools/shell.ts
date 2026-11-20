@@ -21,7 +21,7 @@ import {
   type ToolEntry
 } from '@modules/agent/worker/toolkit'
 import { detectDangerousCommand, findOutsideTargets } from '@modules/agent/worker/tools/shellPolicy'
-import { guardPath, protectedPathOf } from '@modules/agent/worker/sandbox'
+import { guardPaths } from '@modules/agent/worker/sandbox'
 
 /* 运行时 PATH（主进程随每轮对话下发，供命令使用设置的 Node / Python 环境） */
 let runtimePath: string | undefined
@@ -68,26 +68,20 @@ export async function createShellTools(context: ToolContext): Promise<ToolEntry[
           isError: true
         }
       }
-      /* 越界路径：先全量检查敏感目录，再与文件工具共用权限闸门 */
-      const outsideTargets = findOutsideTargets(command, rootDir)
-      const sensitiveTarget = outsideTargets.find((target) => protectedPathOf(target))
-      if (sensitiveTarget) {
-        return toolError(tr(context, 'runtime.tool.protectedPath', [sensitiveTarget]))
-      }
-      for (const outside of outsideTargets) {
-        const outcome = await guardPath({
-          sessionId: context.sessionId,
-          rootDir,
-          target: outside,
-          action: 'command',
-          tool: 'run_command',
-          language: context.language,
-          permissionMode: context.permissionMode,
-          trustedRoots
-        })
-        if (!outcome.allowed) {
-          return toolError(outcome.reason ?? tr(context, 'runtime.tool.commandBlocked', [outside]))
-        }
+      /* 越界路径：一次工具调用的多个目标合并为一次审批（敏感目录由闸门统一拦截） */
+      const outcome = await guardPaths({
+        sessionId: context.sessionId,
+        rootDir,
+        targets: findOutsideTargets(command, rootDir),
+        action: 'command',
+        tool: 'run_command',
+        language: context.language,
+        permissionMode: context.permissionMode,
+        command,
+        trustedRoots
+      })
+      if (!outcome.allowed) {
+        return toolError(outcome.reason ?? tr(context, 'runtime.tool.commandBlocked', [outcome.abs]))
       }
       return new Promise<ReturnType<typeof text>>((resolvePromise) => {
         exec(
@@ -97,7 +91,7 @@ export async function createShellTools(context: ToolContext): Promise<ToolEntry[
             /* 使用设置中配置的 Node / Python 运行环境 */
             env: runtimePath ? { ...process.env, PATH: runtimePath } : process.env,
             timeout: timeout && timeout > 0 ? timeout : 60000,
-            /* 输出最终会被截断到 20k 字符，限制收集上限避免大 buffer 常驻 */
+            /* 输出最终会被截断到 50k 字符，限制收集上限避免大 buffer 常驻 */
             maxBuffer: 1024 * 1024 * 2,
             /* 用户点击终止时同步杀掉子进程，避免长时间占用 */
             signal

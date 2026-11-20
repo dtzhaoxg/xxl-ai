@@ -7,15 +7,13 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useProjectStore } from '@modules/project/renderer/store'
 import { useChatStore } from '@modules/chat/renderer'
-import { useSettingsStore } from '@modules/settings/renderer'
 import { ProjectMemoryDialog } from '@modules/agent/renderer'
 import { ipcErrorMessage } from '@common/renderer/utils/ipcError'
-import { t } from '@renderer/shell/i18n'
+import { t } from '@common/renderer/i18n'
 import type { ProjectDTO } from '@modules/project/shared'
 
 const project = useProjectStore()
 const chat = useChatStore()
-const settings = useSettingsStore()
 
 /* 记忆弹窗 */
 const memoryVisible = ref(false)
@@ -32,17 +30,6 @@ const filteredProjects = computed(() => {
     (item) =>
       item.name.toLowerCase().includes(query) || item.path.toLowerCase().includes(query)
   )
-})
-
-/* 「在文件管理器中显示」文案按运行平台区分 */
-const revealLabel = computed(() => {
-  if (settings.platform === 'darwin') {
-    return t('project.revealMac')
-  }
-  if (settings.platform === 'win32') {
-    return t('project.revealWin')
-  }
-  return t('project.revealLinux')
 })
 
 onMounted(() => {
@@ -143,10 +130,6 @@ function onViewMemory(row: ProjectDTO): void {
 
 /* 行操作下拉项：统一分发到具体动作 */
 function onAction(row: ProjectDTO, command: string): void {
-  if (command === 'memory') {
-    onViewMemory(row)
-    return
-  }
   if (command === 'rename') {
     void onRename(row)
     return
@@ -163,43 +146,42 @@ function onAction(row: ProjectDTO, command: string): void {
 
 <template>
   <div class="project-settings">
-    <div class="settings-block-title">{{ t('project.listTitle') }}</div>
-    <div class="panel-toolbar">
-      <div class="settings-block-tip">{{ t('project.settingsTip') }}</div>
-      <div class="panel-actions">
-        <el-input
-          v-model="keyword"
-          class="project-search"
-          :placeholder="t('project.filterPlaceholder')"
-          clearable
-        >
-          <template #prefix>
-            <el-icon><Search /></el-icon>
-          </template>
-        </el-input>
-        <el-button type="primary" @click="onCreate">
-          <el-icon><Plus /></el-icon>{{ t('project.new') }}
-        </el-button>
-      </div>
+    <div class="project-toolbar">
+      <el-input
+        v-model="keyword"
+        class="project-search"
+        :placeholder="t('project.filterPlaceholder')"
+        clearable
+      >
+        <template #prefix>
+          <el-icon><Search /></el-icon>
+        </template>
+      </el-input>
+      <el-button type="primary" @click="onCreate">
+        <el-icon><Plus /></el-icon>{{ t('project.new') }}
+      </el-button>
     </div>
 
     <el-table :data="filteredProjects" class="project-table" style="width: 100%" row-key="id">
-      <!-- 列宽用 min-width 比例分配：项目名 30、目录 30、长期记忆 15、生成时间 20、操作 15 -->
+      <!--
+        列宽：项目名 / 目录弹性占用剩余空间，其余固定宽度。
+        记忆开关 100px、生成时间 170px、操作 180px（长期记忆按钮 + 操作下拉）。
+      -->
       <el-table-column
         :label="t('project.name')"
-        min-width="30"
+        min-width="200"
         prop="name"
         show-overflow-tooltip
         class-name="project-name-cell"
       />
       <el-table-column
         :label="t('project.path')"
-        min-width="30"
+        min-width="280"
         prop="path"
         class-name="project-path-cell"
         :show-overflow-tooltip="{ popperClass: 'project-path-tooltip' }"
       />
-      <el-table-column :label="t('agent.memoryEnabled')" min-width="15" align="center">
+      <el-table-column :label="t('agent.memoryEnabled')" width="100" align="center">
         <template #default="{ row }">
           <el-switch
             :model-value="row.memoryEnabled"
@@ -207,39 +189,42 @@ function onAction(row: ProjectDTO, command: string): void {
           />
         </template>
       </el-table-column>
-      <el-table-column :label="t('agent.memoryGenerateTime')" min-width="20" align="center">
+      <el-table-column :label="t('agent.memoryGenerateTime')" width="170" align="center">
         <template #default="{ row }">
           {{ formatMemoryTime(row.memoryUpdateTime) }}
         </template>
       </el-table-column>
-      <el-table-column :label="t('common.actions')" min-width="15" align="center">
+      <el-table-column :label="t('common.actions')" width="180" align="center">
         <template #default="{ row }">
-          <el-dropdown
-            trigger="click"
-            popper-class="project-action-dropdown"
-            @command="(command: string) => onAction(row, command)"
-          >
-            <el-button text type="primary" class="action-trigger">
-              {{ t('common.actions') }}
-              <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+          <div class="row-actions">
+            <!-- 长期记忆为高频操作，直接外露；其余低频操作收进下拉 -->
+            <el-button text type="primary" class="action-trigger" @click="onViewMemory(row)">
+              {{ t('project.memoryAction') }}
             </el-button>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item command="memory">
-                  {{ t('agent.memoryView') }}
-                </el-dropdown-item>
-                <el-dropdown-item command="rename">
-                  {{ t('project.rename') }}
-                </el-dropdown-item>
-                <el-dropdown-item command="reveal">
-                  {{ revealLabel }}
-                </el-dropdown-item>
-                <el-dropdown-item command="delete" divided class="danger-item">
-                  {{ t('project.delete') }}
-                </el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
+            <el-dropdown
+              trigger="click"
+              popper-class="project-action-dropdown"
+              @command="(command: string) => onAction(row, command)"
+            >
+              <el-button text type="primary" class="action-trigger">
+                {{ t('common.actions') }}
+                <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="rename">
+                    {{ t('project.rename') }}
+                  </el-dropdown-item>
+                  <el-dropdown-item command="reveal">
+                    {{ t('project.openFolder') }}
+                  </el-dropdown-item>
+                  <el-dropdown-item command="delete" class="danger-item" divided>
+                    {{ t('project.delete') }}
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </div>
         </template>
       </el-table-column>
       <template #empty>
@@ -261,27 +246,18 @@ function onAction(row: ProjectDTO, command: string): void {
 </template>
 
 <style scoped lang="scss">
-@use '../../../../common/renderer/styles/settingsBlock.scss';
-
 .project-settings {
   font-size: var(--desk-font-base);
-  --el-font-size-base: 14px;
+  --el-font-size-base: var(--desk-font-base);
 }
 
-.panel-toolbar {
+.project-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
   flex-wrap: wrap;
-}
-
-.panel-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-left: auto;
 }
 
 .project-search {
@@ -298,6 +274,15 @@ function onAction(row: ProjectDTO, command: string): void {
 .project-table :deep(.project-path-cell .cell) {
   color: var(--desk-text-secondary);
   font-size: var(--desk-font-sm);
+}
+
+/* 操作区：长期记忆外露按钮 + 操作下拉，单行不换行 */
+.row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  white-space: nowrap;
 }
 
 /* 操作按钮：压缩内边距，避免窄列把下拉箭头截成省略号 */

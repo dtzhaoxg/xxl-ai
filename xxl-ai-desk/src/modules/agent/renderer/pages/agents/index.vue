@@ -8,7 +8,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { AgentAvatar, AgentEditDrawer, useAgentStore } from '@modules/agent/renderer'
 import { PluginCenterShell } from '@modules/plugin/renderer'
 import { ipcErrorMessage } from '@common/renderer/utils/ipcError'
-import { t } from '@renderer/shell/i18n'
+import { t } from '@common/renderer/i18n'
 import type { AgentDTO } from '@modules/agent/shared'
 
 const agentStore = useAgentStore()
@@ -73,11 +73,7 @@ function formatTime(iso: string): string {
 </script>
 
 <template>
-  <PluginCenterShell>
-    <template #header>
-      <div class="page-tip">{{ t('agent.manageTip') }}</div>
-    </template>
-
+  <PluginCenterShell :title="t('plugin.agent')" :description="t('agent.manageTip')">
     <div class="agent-body">
       <div class="panel-toolbar">
         <div class="toolbar-title">{{ t('agent.listTitle') }}</div>
@@ -165,18 +161,10 @@ function formatTime(iso: string): string {
 </template>
 
 <style scoped lang="scss">
-/* 说明区：位于中心外壳 header 内 */
-.page-tip {
-  padding-bottom: 16px;
-  font-size: var(--desk-font-xs);
-  color: var(--desk-text-tertiary);
-  line-height: 1.6;
-}
-
 .agent-body {
   padding: 0 28px 32px;
   font-size: var(--desk-font-base);
-  --el-font-size-base: 14px;
+  --el-font-size-base: var(--desk-font-base);
 }
 
 .panel-toolbar {

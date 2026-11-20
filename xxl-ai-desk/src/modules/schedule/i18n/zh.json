@@ -1,0 +1,210 @@
+{
+  "schedule": {
+    "title": "定时任务",
+    "nav": {
+      "tasks": "任务列表",
+      "logs": "运行日志",
+      "dispatch": "调度设置"
+    },
+    "tip": {
+      "tasks": "按触发规则定时启动会话；行内「运行日志」可查看对应触发记录。",
+      "logs": "查看每次触发（含失败跳过）的运行日志与触发时间；点击「查看会话」进入对话详情。",
+      "dispatch": "配置定时任务的调度策略：电脑休眠、最大并发任务数与任务巡检间隔。"
+    },
+    "sessionBadge": "定时任务会话",
+    "new": "新建定时任务",
+    "editTitle": "编辑定时任务",
+    "empty": "暂无定时任务",
+    "emptyTip": "创建后按触发规则定时启动会话；运行结果可在会话与运行日志中查看。",
+    "searchPlaceholder": "搜索任务名称或指令",
+    "allProjects": "全部项目",
+    "allAgents": "全部 Agent",
+    "allStatus": "全部状态",
+    "allTasks": "全部任务",
+    "reset": "重置",
+    "total": "共 {0} 个任务",
+    "status": {
+      "enabled": "已启用",
+      "disabled": "已停用"
+    },
+    "logStatus": {
+      "running": "进行中",
+      "success": "成功",
+      "skip": "失败跳过",
+      "failed": "失败"
+    },
+    "runTrigger": {
+      "schedule": "定时触发",
+      "manual": "立即运行"
+    },
+    "columns": {
+      "task": "任务",
+      "session": "会话属性",
+      "schedule": "调度",
+      "status": "状态",
+      "actions": "操作"
+    },
+    "sessionMode": {
+      "label": "会话设置方式",
+      "new": "每次新建会话",
+      "reuse": "复用上次会话",
+      "reuseTip": "复用的会话已删除或不存在时自动新建。"
+    },
+    "sessionBlockPolicy": {
+      "label": "会话阻塞策略",
+      "skip": "本次调度忽略",
+      "force": "强制调度执行",
+      "skipTip": "复用会话执行中则跳过本次调度。",
+      "forceTip": "复用会话执行中则终止后重新触发。"
+    },
+    "fields": {
+      "name": "任务名称",
+      "namePlaceholder": "例如：每日项目巡检",
+      "prompt": "任务指令",
+      "promptPlaceholder": "每个周期发送给 Agent 的内容",
+      "schedule": "触发规则",
+      "project": "项目",
+      "agent": "Agent",
+      "provider": "供应商",
+      "model": "模型",
+      "reasoning": "推理等级",
+      "permission": "权限模式",
+      "permissionTip": "定时运行无人值守，越界写入 / 命令会被自动拒绝；需要更大范围请在任务中选择「完全权限」。",
+      "timeout": "任务超时",
+      "timeoutNone": "不限时",
+      "timeoutCustom": "自定义",
+      "timeoutTip": "超过设定时长后由巡检主动终止本轮；不限时则不自动终止。",
+      "minutes": "分钟",
+      "enabled": "启用任务"
+    },
+    "section": {
+      "session": "会话属性"
+    },
+    "rule": {
+      "triggerTip": "点击设置触发规则",
+      "frequency": {
+        "daily": "每天",
+        "weekly": "每周",
+        "monthly": "每月",
+        "interval": "间隔",
+        "custom": "自定义"
+      },
+      "time": "时间",
+      "weekdays": "星期",
+      "monthDays": "日期",
+      "intervalEvery": "每隔",
+      "unit": {
+        "minute": "分钟",
+        "hour": "小时"
+      },
+      "weekLabel": "周{0}",
+      "nextRuns": "未来触发时间",
+      "previewEmpty": "该规则没有未来触发时间",
+      "invalid": "触发规则不合法，请重新设置",
+      "fields": {
+        "year": "年",
+        "month": "月",
+        "day": "日",
+        "weekday": "周",
+        "hour": "时",
+        "minute": "分",
+        "second": "秒"
+      },
+      "mode": {
+        "any": "不限",
+        "values": "指定",
+        "range": "区间",
+        "step": "步长"
+      },
+      "rangeSeparator": "至",
+      "stepPrefix": "从",
+      "stepUnit": "每",
+      "fieldRange": "{0} 至 {1}",
+      "fieldStep": "从 {0} 起每 {1}",
+      "dayLast": "最后一天",
+      "separator": "、",
+      "weekday": {
+        "1": "一",
+        "2": "二",
+        "3": "三",
+        "4": "四",
+        "5": "五",
+        "6": "六",
+        "7": "日"
+      },
+      "desc": {
+        "dailyAt": "每天 {0}",
+        "weeklyAt": "每周{0} {1}",
+        "monthlyAt": "每月 {0} {1}",
+        "monthlyAndWeekly": "每月 {0} 且每周{1} {2}",
+        "yearPart": "{0} 年",
+        "monthPart": "{0} 月",
+        "dayPart": "{0}",
+        "weekdayPart": "每周{0}",
+        "everyNMinutes": "每 {0} 分钟",
+        "everyNHours": "每 {0} 小时",
+        "everyMinute": "每分钟",
+        "everySecond": "每秒",
+        "custom": "{0}"
+      }
+    },
+    "actions": {
+      "runNow": "立即运行",
+      "logs": "运行日志",
+      "clearLogs": "日志清理"
+    },
+    "deleteConfirm": "确定删除定时任务「{0}」？历史会话将保留，运行日志将一并清理。",
+    "deleted": "定时任务已删除",
+    "saved": "定时任务已保存",
+    "runStarted": "任务已开始运行",
+    "openSession": "查看会话",
+    "nextRun": "下次 {0}",
+    "nextRunNone": "未安排",
+    "runNowFailed": "任务启动失败：{0}",
+    "projectRequired": "请选择项目",
+    "agentRequired": "请选择 Agent",
+    "modelRequired": "请选择模型",
+    "logs": {
+      "taskFilter": "任务",
+      "rangeFilter": "触发时间",
+      "rangeStart": "开始日期",
+      "rangeEnd": "结束日期",
+      "task": "任务",
+      "triggerType": "触发方式",
+      "status": "状态",
+      "session": "会话",
+      "triggeredAt": "触发时间",
+      "empty": "暂无运行日志",
+      "unknownTask": "任务已删除",
+      "deletedSession": "会话已删除",
+      "clearTitle": "清理运行日志",
+      "clearTip": "按任务与触发时间范围删除运行日志；删除后不可恢复，历史会话不受影响。请至少选择任务或时间范围。",
+      "clearSubmit": "清理",
+      "clearRequired": "请至少选择任务或时间范围",
+      "clearDone": "已清理 {0} 条运行日志",
+      "clearNone": "没有符合条件的运行日志"
+    },
+    "dispatch": {
+      "keepAwake": "保持电脑不睡眠",
+      "keepAwakeDesc": "开启后阻止电脑进入睡眠（屏幕仍可关闭），避免定时任务被挂起中断；合盖或手动睡眠仍会暂停任务。",
+      "maxConcurrency": "最大并发任务数",
+      "maxConcurrencyDesc": "同时运行的定时任务上限（{0} ~ {1}）；达到上限后的触发将记为已跳过。",
+      "watchdogInterval": "任务巡检间隔",
+      "watchdogIntervalDesc": "每隔多少秒巡检一次任务：校正计时器、终止超时运行（{0} ~ {1} 秒）。",
+      "watchdogLastRun": "上次巡检时间：{0}",
+      "watchdogNextRun": "下次巡检时间：{0}",
+      "watchdogNeverRun": "尚未执行",
+      "saved": "调度设置已保存"
+    },
+    "seed": {
+      "dailyNews": {
+        "name": "每日早报",
+        "prompt": "每天早上从 2~3 个权威科技资讯站点获取当天热点，提炼 5 条值得关注的要闻，每条包含一句结论与来源链接。来源由你自行选择，优先官方博客与主流科技媒体。结果写入 早报/YYYY-MM-DD.md，目录不存在则创建；打不开的站点在文末单独列出。仅在工作目录内读写，不要执行需要权限审批的操作。"
+      },
+      "weeklyIndustry": {
+        "name": "每周行业观察",
+        "prompt": "检索上周 AI 行业动态，重点关注开源模型、AI 产品与应用、行业政策与主要玩家动向，可访问公开站点，来源自行选择，优先官方与权威媒体。输出一页观察：3 个趋势判断、3 条值得跟进的信息（附链接）、1 条对我们的启示。结果写入 行业观察/YYYY-Www.md，目录不存在则创建。仅在工作目录内读写，不要执行需要权限审批的操作。"
+      }
+    }
+  }
+}

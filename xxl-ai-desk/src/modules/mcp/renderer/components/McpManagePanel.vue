@@ -7,7 +7,7 @@ import { onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useMcpStore } from '@modules/mcp/renderer'
 import { ipcErrorMessage } from '@common/renderer/utils/ipcError'
-import { t } from '@renderer/shell/i18n'
+import { t } from '@common/renderer/i18n'
 import type { McpDTO } from '@modules/mcp/shared'
 
 const emit = defineEmits<{
@@ -189,7 +189,7 @@ async function onDelete(row: McpDTO): Promise<void> {
   padding: 0 28px 32px;
   /* 与「设置 → 模型供应商」列表保持一致的字号 */
   font-size: var(--desk-font-base);
-  --el-font-size-base: 14px;
+  --el-font-size-base: var(--desk-font-base);
 }
 
 .panel-toolbar {
