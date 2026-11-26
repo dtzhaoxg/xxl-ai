@@ -11,7 +11,7 @@ import log from 'electron-log/main'
 import { t } from '@common/main/i18n'
 import { abortChat, createSession, getSession, sendChat, updateSession } from '@modules/chat/main'
 import type { ChatEventPayload } from '@modules/chat/main'
-import { isAgentRunning } from '@modules/agent/main'
+import { isAgentRunning } from '@modules/chat/harness'
 import { getSettings } from '@modules/settings/main'
 import type {
   ScheduleLogStatus,
@@ -54,7 +54,7 @@ function pad(value: number): string {
   return String(value).padStart(2, '0')
 }
 
-/* 任务会话标题：任务名 + 本次运行时间，避免多次运行同名 */
+/* 任务会话标题：任务名 + 创建时间，创建后固定，仅用于区分新建模式下的多次会话 */
 function buildSessionTitle(taskName: string, at: Date): string {
   return `${taskName} · ${pad(at.getMonth() + 1)}-${pad(at.getDate())} ${pad(at.getHours())}:${pad(at.getMinutes())}`
 }
@@ -266,8 +266,8 @@ export function startScheduledRun(
     sessionId = session.id
     deps?.notifySessionChanged(sessionId)
   } else {
-    /* 复用会话：标题同步为本次运行时间，避免始终停留在首次创建时刻 */
-    updateSession(sessionId, { title: buildSessionTitle(task.name, startedAt) })
+    /* 复用会话：标题创建后固定，仅刷新活跃时间，保证侧栏仍按最近运行排序 */
+    updateSession(sessionId, {})
     deps?.notifySessionChanged(sessionId)
   }
 

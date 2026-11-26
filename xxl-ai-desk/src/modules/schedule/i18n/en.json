@@ -21,6 +21,7 @@
     "allAgents": "All Agents",
     "allStatus": "All statuses",
     "allTasks": "All tasks",
+    "query": "Query",
     "reset": "Reset",
     "total": "{0} tasks",
     "status": {
@@ -70,6 +71,8 @@
       "reasoning": "Reasoning",
       "permission": "Permission",
       "permissionTip": "Scheduled runs are unattended: out-of-workspace writes and commands are denied automatically. Select \"Full access\" if the task needs a wider scope.",
+      "humanMode": "Human mode",
+      "humanModeFixedOff": "Scheduled runs never pause for human confirmation: out-of-scope operations are denied automatically, and questions are handled by the model.",
       "timeout": "Task timeout",
       "timeoutNone": "No limit",
       "timeoutCustom": "Custom",

@@ -21,6 +21,7 @@
     "allAgents": "全部 Agent",
     "allStatus": "全部状态",
     "allTasks": "全部任务",
+    "query": "查询",
     "reset": "重置",
     "total": "共 {0} 个任务",
     "status": {
@@ -70,6 +71,8 @@
       "reasoning": "推理等级",
       "permission": "权限模式",
       "permissionTip": "定时运行无人值守，越界写入 / 命令会被自动拒绝；需要更大范围请在任务中选择「完全权限」。",
+      "humanMode": "人机模式",
+      "humanModeFixedOff": "定时任务运行时不会暂停等待人工确认：超出权限范围的操作自动拒绝，提问交由模型自行处理。",
       "timeout": "任务超时",
       "timeoutNone": "不限时",
       "timeoutCustom": "自定义",

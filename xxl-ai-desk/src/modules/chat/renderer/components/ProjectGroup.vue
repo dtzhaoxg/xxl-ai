@@ -11,7 +11,7 @@ import SidebarRow from '@renderer/shell/layout/components/Sidebar/SidebarRow.vue
 import { DeskTooltip } from '@common/renderer/components'
 import { t } from '@common/renderer/i18n'
 import type { ProjectDTO } from '@modules/project/shared'
-import type { SessionDTO } from '@modules/chat/shared'
+import type { SessionDTO, SessionStatus } from '@modules/chat/shared'
 
 const props = defineProps<{
   /* 项目及其下会话（已按当前排序方式排好） */
@@ -26,6 +26,25 @@ const emit = defineEmits<{ toggle: []; select: [sessionId: number] }>()
 
 const chat = useChatStore()
 const projectStore = useProjectStore()
+
+/* 会话状态点：仅展示需要用户关注的运行态 / 异常态 */
+const STATUS_LABEL_KEYS: Record<SessionStatus, string> = {
+  idle: 'chat.status.idle',
+  running: 'chat.status.running',
+  'waiting-confirm': 'chat.status.waitingConfirm',
+  completed: 'chat.status.completed',
+  failed: 'chat.status.failed',
+  aborted: 'chat.status.aborted'
+}
+
+/* 仅运行中 / 待确认 / 失败展示提示：进行中给反馈，需要用户时才常驻 */
+function statusVisible(status: SessionStatus): boolean {
+  return status === 'running' || status === 'waiting-confirm' || status === 'failed'
+}
+
+function statusLabel(status: SessionStatus): string {
+  return t(STATUS_LABEL_KEYS[status])
+}
 
 /* 项目行下拉实例：右键项目名与悬浮「...」共用同一菜单 */
 const projectMenu = ref<DropdownInstance>()
@@ -244,6 +263,16 @@ async function onDeleteSession(id: number): Promise<void> {
                 </template>
               </el-dropdown>
             </DeskTooltip>
+            <span
+              v-if="statusVisible(session.status)"
+              class="session-status"
+              :class="`session-status--${session.status}`"
+              role="img"
+              :title="statusLabel(session.status)"
+              :aria-label="statusLabel(session.status)"
+            >
+              <span class="session-status-dot" />
+            </span>
           </span>
         </template>
       </SidebarRow>
@@ -271,6 +300,58 @@ async function onDeleteSession(id: number): Promise<void> {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+/* 会话行状态点：运行中单点闪烁，待确认 / 失败单点常驻，完成与终止不打扰 */
+/* 状态点位于行尾操作区：操作图标隐藏时仍保持可见，靠右对齐 */
+.session-status {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  visibility: visible;
+}
+
+.session-status-dot {
+  flex-shrink: 0;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.session-status--waiting-confirm {
+  color: var(--desk-info);
+  opacity: 0.55;
+}
+
+.session-status--failed {
+  color: var(--desk-danger);
+  opacity: 0.55;
+}
+
+/* 运行中：单点闪烁，结束后自动消失 */
+.session-status--running .session-status-dot {
+  background: var(--desk-warning);
+  animation: session-status-blink 1s ease-in-out infinite;
+}
+
+@keyframes session-status-blink {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+
+  50% {
+    opacity: 0.9;
+  }
+}
+
+/* 减少动效偏好下保持静态可见，不做呼吸动画 */
+@media (prefers-reduced-motion: reduce) {
+  .session-status--running .session-status-dot {
+    opacity: 0.55;
+    animation: none;
+  }
 }
 
 .session-empty {
